@@ -16,6 +16,19 @@ jobs:
     name: lint и быстрые тесты
     runs-on: main
     steps:
+      - name: Проверить node и установить при отсутствии
+        run: |
+          set -eo pipefail
+          if command -v node >/dev/null 2>&1; then
+            echo "node уже установлен: $(node -v)"
+            exit 0
+          fi
+          echo "node не найден, устанавливаю из репозитория Debian"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends nodejs
+          node -v
+
       - name: Получить исходники
         uses: actions/checkout@v4
 
@@ -42,6 +55,19 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_suite }}
     runs-on: main
     steps:
+      - name: Проверить node и установить при отсутствии
+        run: |
+          set -eo pipefail
+          if command -v node >/dev/null 2>&1; then
+            echo "node уже установлен: $(node -v)"
+            exit 0
+          fi
+          echo "node не найден, устанавливаю из репозитория Debian"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends nodejs
+          node -v
+
       - name: Получить исходники
         uses: actions/checkout@v4
 
