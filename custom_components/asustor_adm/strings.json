@@ -2,44 +2,44 @@
   "config": {
     "step": {
       "user": {
-        "title": "Подключение к ASUSTOR NAS",
-        "description": "Укажите адрес NAS и учётную запись ADM. Для самоподписанного сертификата отключите проверку TLS.",
+        "title": "ASUSTOR NAS connection",
+        "description": "Enter the NAS address and the ADM account. Turn off TLS verification for a self-signed certificate.",
         "data": {
-          "host": "Адрес",
-          "port": "Порт",
-          "use_ssl": "Использовать HTTPS",
-          "verify_ssl": "Проверять TLS-сертификат",
-          "username": "Учётная запись",
-          "password": "Пароль"
+          "host": "Host",
+          "port": "Port",
+          "use_ssl": "Use HTTPS",
+          "verify_ssl": "Verify TLS certificate",
+          "username": "Username",
+          "password": "Password"
         }
       },
       "reauth_confirm": {
-        "title": "Повторная авторизация",
-        "description": "Сессия ADM истекла. Введите пароль для учётной записи {username}.",
+        "title": "Reauthenticate",
+        "description": "The ADM session has expired. Enter the password for account {username}.",
         "data": {
-          "password": "Пароль"
+          "password": "Password"
         }
       }
     },
     "error": {
-      "invalid_auth": "ADM отклонил учётные данные",
-      "cannot_connect": "Не удалось подключиться к NAS",
-      "two_factor": "Для учётной записи включена двухфакторная авторизация, она пока не поддерживается",
-      "unknown": "Непредвиденная ошибка"
+      "invalid_auth": "ADM rejected the credentials",
+      "cannot_connect": "Could not connect to the NAS",
+      "two_factor": "Two-factor authentication is enabled for this account and is not supported yet",
+      "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "Этот NAS уже настроен",
-      "reauth_entry_missing": "Запись для переавторизации не найдена"
+      "already_configured": "This NAS is already configured",
+      "reauth_entry_missing": "The config entry for reauthentication was not found"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Интервалы опроса",
-        "description": "Быстрый цикл обновляет ресурсы и диски, медленный — сервисы, обновления и внешние диски. Частый опрос мешает дискам NAS засыпать.",
+        "title": "Polling intervals",
+        "description": "The fast cycle updates resources and disks, the slow one updates services, ADM updates and external disks. Frequent polling keeps the NAS disks awake.",
         "data": {
-          "fast_interval": "Интервал быстрого опроса, с",
-          "slow_interval": "Интервал медленного опроса, с"
+          "fast_interval": "Fast polling interval, s",
+          "slow_interval": "Slow polling interval, s"
         }
       }
     }

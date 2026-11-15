@@ -184,6 +184,20 @@ def test_changelog_notes_returns_only_version_body() -> None:
 
 def test_changelog_notes_rejects_empty_section(tree: pathlib.Path) -> None:
     """Выпуск без записей в CHANGELOG не даёт пустого текста релиза."""
+    # Раздел будущих изменений заполняется по ходу работы, поэтому пустой
+    # заголовок задаётся здесь явно, а не берётся из рабочего CHANGELOG.
+    (tree / "CHANGELOG.md").write_text(
+        "# История изменений\n"
+        "\n"
+        "## [Unreleased]\n"
+        "\n"
+        "## [0.1.0] - 2026-11-15\n"
+        "\n"
+        "### Добавлено\n"
+        "\n"
+        "- Интеграция.\n",
+        encoding="utf-8",
+    )
     assert bump_version.main(["--level", "patch"], root=tree) == 0
     text = _read_changelog(tree)
     with pytest.raises(bump_version.VersionError):
