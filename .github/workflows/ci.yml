@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: ruff
+    runs-on: main
+    steps:
+      - name: Получить исходники
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL#*://}"
+          git clone --quiet "http://oauth2:${GITHUB_TOKEN}@${server}/${GITHUB_REPOSITORY}.git" repo
+          cd repo
+          git checkout --quiet "${GITHUB_SHA}"
+      - name: Установить uv
+        run: |
+          set -euo pipefail
+          command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Проверить код
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          uv_bin="$HOME/.local/bin/uv"
+          [ -x "$uv_bin" ] || uv_bin="$(command -v uv)"
+          "$uv_bin" run --no-project ruff check .
+          "$uv_bin" run --no-project ruff format --check .
+
+  tests:
+    name: pytest
+    runs-on: main
+    steps:
+      - name: Получить исходники
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL#*://}"
+          git clone --quiet "http://oauth2:${GITHUB_TOKEN}@${server}/${GITHUB_REPOSITORY}.git" repo
+          cd repo
+          git checkout --quiet "${GITHUB_SHA}"
+      - name: Установить uv
+        run: |
+          set -euo pipefail
+          command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Прогнать тесты
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          uv_bin="$HOME/.local/bin/uv"
+          [ -x "$uv_bin" ] || uv_bin="$(command -v uv)"
+          "$uv_bin" venv .venv --python 3.13
+          "$uv_bin" pip install --python .venv/bin/python -r requirements_test.txt
+          .venv/bin/python -m pytest -q -p no:cacheprovider
