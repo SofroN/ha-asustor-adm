@@ -19,9 +19,7 @@ async def test_ip_address_and_attributes(hass, adm, entry) -> None:
     assert state.attributes["mac"] == "00:00:5e:00:53:a7"
     assert state.attributes["gateway"] == "192.168.77.1"
     assert state.attributes["dns"] == ["192.168.77.3", "77.88.8.8"]
-    assert state.attributes["ipv6"] == "fe80::200:5eff:fe00:53a7/64".replace(
-        "ab7", "aba7"
-    )
+    assert state.attributes["ipv6"] == "fe80::200:5eff:fe00:53a7/64"
 
 
 async def test_wan_address_is_disabled_by_default(hass, adm, entry) -> None:
