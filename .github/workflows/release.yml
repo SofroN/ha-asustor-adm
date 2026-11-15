@@ -1,0 +1,147 @@
+name: Release
+
+# Выпуск версии: bump файлов версии, коммит, тег и релиз через API того
+# хостинга, где запущен workflow. Вся логика версии — в scripts/bump_version.py,
+# здесь остаются только git и HTTP. Запускается вручную из UI.
+#
+# Метка раннера, как и в ci.yml, берётся из переменной CI_RUNNER: на Forgejo
+# это self-hosted `main`, на GitHub переменная не задана и подставляется
+# стандартный `ubuntu-latest`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      level:
+        description: "Что выпускаем: current — версию из VERSION, иначе инкремент"
+        type: choice
+        options: [current, patch, minor, major]
+        default: current
+      version:
+        description: "Явная версия X.Y.Z (приоритетнее level); пусто — не задана"
+        type: string
+        default: ""
+      dry_run:
+        description: "Только показать, что будет выпущено"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: версия, тег и релиз
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      # JS-действия требуют node на хосте: на self-hosted его может не быть.
+      - name: Подготовить node
+        run: |
+          set -eo pipefail
+          if command -v node >/dev/null 2>&1; then
+            echo "node уже установлен: $(node -v)"
+            exit 0
+          fi
+          echo "node не найден, устанавливаю из репозитория Debian"
+          apt() { if [ "$(id -u)" -eq 0 ]; then apt-get "$@"; else sudo apt-get "$@"; fi; }
+          export DEBIAN_FRONTEND=noninteractive
+          apt update -qq
+          apt install -y -qq --no-install-recommends nodejs
+          node -v
+
+      - name: Получить исходники
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Python на self-hosted раннере не гарантирован — берём его через uv,
+      # как и в CI.
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Настроить git
+        run: |
+          set -eo pipefail
+          git config user.name "release-bot"
+          git config user.email "release-bot@users.noreply.local"
+
+      - name: Выпустить версию
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_LEVEL: ${{ inputs.level }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -eo pipefail
+          args=()
+          if [ -n "$INPUT_VERSION" ]; then
+            args+=(--version "$INPUT_VERSION")
+          elif [ "$INPUT_LEVEL" != "current" ]; then
+            args+=(--level "$INPUT_LEVEL")
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          echo "выпускается версия: $(uv run --no-project python \
+            scripts/bump_version.py "${args[@]}")"
+
+      # Тег, который уже указывает на текущий коммит, не пересоздаётся:
+      # повторный запуск добавляет только недостающий релиз.
+      - name: Закоммитить и пометить тегом
+        if: ${{ inputs.dry_run != true }}
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -eo pipefail
+          tag="v$(uv run --no-project python scripts/bump_version.py)"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "файлы версии не изменились, коммит не нужен"
+          else
+            git commit -m "chore(release): $tag"
+          fi
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "тег $tag уже существует"
+          else
+            git tag -a "$tag" -m "$tag"
+          fi
+          git push origin "HEAD:$BRANCH" --follow-tags
+
+      - name: Опубликовать релиз
+        if: ${{ inputs.dry_run != true }}
+        env:
+          TOKEN: ${{ github.token }}
+          API: ${{ github.api_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eo pipefail
+          tag="v$(uv run --no-project python scripts/bump_version.py)"
+          notes=$(uv run --no-project python scripts/bump_version.py --notes)
+          payload=$(printf '%s' "$notes" | uv run --no-project python -c \
+            'import json, sys
+          body = sys.stdin.read()
+          print(json.dumps({
+              "tag_name": sys.argv[1],
+              "name": sys.argv[1],
+              "body": body,
+              "draft": False,
+              "prerelease": False,
+          }))' "$tag")
+          status=$(curl -sS -o /tmp/release.json -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" "$API/repos/$REPO/releases/tags/$tag")
+          if [ "$status" = "200" ]; then
+            echo "релиз $tag уже опубликован"
+            exit 0
+          fi
+          status=$(curl -sS -o /tmp/release.json -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/vnd.github+json" \
+            -d "$payload" "$API/repos/$REPO/releases")
+          if [ "$status" != "201" ]; then
+            echo "не удалось создать релиз: HTTP $status" >&2
+            cat /tmp/release.json >&2
+            exit 1
+          fi
+          echo "релиз $tag создан"
