@@ -55,6 +55,7 @@ from .parse import (
     parse_volumes,
     parse_wan_ip,
 )
+from .values import version_is_newer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -282,36 +283,61 @@ class ADMSlowCoordinator(ADMBaseCoordinator[SlowData]):
         return volumes
 
     def _async_fetch_firmware(self, payload: dict[str, Any] | None) -> FirmwareInfo:
-        """Разобрать сведения о прошивке, сохранив последнее подтверждённое значение."""
+        """Свести сведения о прошивке и вычислить признак доступного обновления."""
         if payload is None:
             error = self._cycle_errors.get(END_FIRMWARE.path)
             code = error.code if isinstance(error, ADMResponseError) else None
             _LOGGER.debug("Firmware check unavailable, code %s", code)
             return _carry_firmware(self._last_firmware, code)
-        firmware = _safe_parse(parse_firmware, payload, None, "firmware")
-        if firmware is None:
+        parsed = _safe_parse(parse_firmware, payload, None, "firmware")
+        if parsed is None:
             return _carry_firmware(self._last_firmware, None)
+        # Установленная версия описывает устройство и переживает ответ без неё.
+        # Целевая версия, флаг и время проверки — только сведения этого ответа:
+        # унаследованная целевая версия и была источником ложного обновления.
+        installed = parsed.installed_version or self._last_firmware.installed_version
         firmware = FirmwareInfo(
-            installed_version=firmware.installed_version
-            or self._last_firmware.installed_version,
-            update_available=(
-                firmware.update_available
-                if firmware.update_available is not None
-                else self._last_firmware.update_available
+            installed_version=installed,
+            update_available=_firmware_update_available(
+                installed, parsed.target_version
             ),
-            target_version=firmware.target_version,
+            target_version=parsed.target_version,
+            notification_flag=parsed.notification_flag,
+            last_check_time=parsed.last_check_time,
         )
+        if firmware.notification_flag and firmware.target_version is None:
+            _LOGGER.debug(
+                "Update notification without target version: installed %s, "
+                "notification flag %s",
+                installed,
+                firmware.notification_flag,
+            )
         self._last_firmware = firmware
         return firmware
 
 
+def _firmware_update_available(
+    installed: str | None, target: str | None
+) -> bool | None:
+    """Вычислить признак обновления по сведённым версиям.
+
+    Обновлением считается только подтверждённая более новая целевая версия;
+    ``None`` означает «неизвестно»: цели нет либо версии не сравнимы.
+    """
+    if target is None:
+        return None
+    return version_is_newer(target, installed)
+
+
 def _carry_firmware(previous: FirmwareInfo, error_code: int | None) -> FirmwareInfo:
-    """Вернуть предыдущее состояние прошивки с отметкой о неудачной проверке."""
+    """Вернуть последнее подтверждённое состояние прошивки с отметкой о сбое."""
     return FirmwareInfo(
         installed_version=previous.installed_version,
         update_available=previous.update_available,
         target_version=previous.target_version,
         last_check_error=error_code,
+        notification_flag=previous.notification_flag,
+        last_check_time=previous.last_check_time,
     )
 
 

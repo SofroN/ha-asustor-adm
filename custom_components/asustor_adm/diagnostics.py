@@ -90,6 +90,8 @@ async def async_get_config_entry_diagnostics(
                 "installed_version": slow.firmware.installed_version,
                 "update_available": slow.firmware.update_available,
                 "target_version": slow.firmware.target_version,
+                "notification_flag": slow.firmware.notification_flag,
+                "last_check_time": slow.firmware.last_check_time,
                 "last_check_error": slow.firmware.last_check_error,
             },
             "counts": {

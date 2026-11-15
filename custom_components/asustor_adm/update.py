@@ -14,7 +14,7 @@ from .entity import ADMRuntime, ADMSlowEntity
 
 
 class ADMFirmwareUpdateEntity(ADMSlowEntity, UpdateEntity):
-    """Обновление прошивки ADM с известной целевой версией."""
+    """Обновление прошивки ADM с подтверждённой более новой версией."""
 
     _attr_translation_key = "firmware"
     _attr_supported_features = UpdateEntityFeature(0)
@@ -30,8 +30,25 @@ class ADMFirmwareUpdateEntity(ADMSlowEntity, UpdateEntity):
 
     @property
     def latest_version(self) -> str | None:
-        """Вернуть подтверждённую целевую версию ADM."""
-        return self._runtime.slow_data.firmware.target_version
+        """Вернуть версию, которую Home Assistant покажет как доступную.
+
+        Целевая версия отдаётся только когда она подтверждённо новее
+        установленной. Иначе возвращается установленная версия: сравнение
+        равных строк даёт «обновлений нет», а устаревшая или несравнимая цель
+        не может выглядеть обновлением.
+        """
+        firmware = self._runtime.slow_data.firmware
+        if firmware.target_version is not None and firmware.update_available is True:
+            return firmware.target_version
+        return firmware.installed_version
+
+    @property
+    def available(self) -> bool:
+        """Быть недоступной, пока ADM не сообщил целевую версию."""
+        return (
+            super().available
+            and self._runtime.slow_data.firmware.target_version is not None
+        )
 
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
@@ -48,13 +65,14 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Создать сущность обновления только при известной целевой версии."""
+    """Создать сущность обновления только при подтверждённой новой версии."""
     runtime: ADMRuntime = entry.runtime_data
     known: set[str] = set()
 
     def _sync() -> None:
-        target = runtime.slow_data.firmware.target_version
-        if target is None or target in known:
+        firmware = runtime.slow_data.firmware
+        target = firmware.target_version
+        if firmware.update_available is not True or target is None or target in known:
             return
         known.add(target)
         async_add_entities([ADMFirmwareUpdateEntity(runtime)])

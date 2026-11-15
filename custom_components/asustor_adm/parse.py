@@ -324,7 +324,12 @@ def parse_tasks(payload: Mapping[str, Any] | None) -> int | None:
 
 
 def parse_firmware(payload: Mapping[str, Any] | None) -> FirmwareInfo:
-    """Разобрать ответ `firmwarestatus.cgi?act=get_static_info`."""
+    """Разобрать ответ `firmwarestatus.cgi?act=get_static_info`.
+
+    Возвращаются только сведения ответа. Признак доступности обновления здесь
+    не выводится: флаг уведомления не является доказательством обновления, а
+    целевая версия сравнивается с установленной после сведения состояния.
+    """
     data = _mapping(payload)
     target = (
         to_text(data.get("new_version"))
@@ -333,8 +338,10 @@ def parse_firmware(payload: Mapping[str, Any] | None) -> FirmwareInfo:
     )
     return FirmwareInfo(
         installed_version=to_text(data.get("installed_version")),
-        update_available=to_flag(data.get("update_available_notification")),
+        update_available=None,
         target_version=target,
+        notification_flag=to_flag(data.get("update_available_notification")),
+        last_check_time=to_text(data.get("last_update_time")),
     )
 
 

@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import logging
 
-from helpers import setup_integration
+from helpers import load_fixture, setup_integration
 
 from custom_components.asustor_adm.const import (
     END_ACTIVITY,
     END_DISK_LIST,
+    END_FIRMWARE,
     END_SYSINFO,
     END_VOLUME_LIST,
 )
@@ -44,7 +45,11 @@ async def test_diagnostics_lists_services(hass, adm, entry) -> None:
     assert services["smb"] is True
     assert services["ssh"] is False
     assert len(services) == 9
-    assert diagnostics["firmware"]["installed_version"] == "5.1.4.RM62"
+    firmware = diagnostics["firmware"]
+    assert firmware["installed_version"] == "5.1.4.RM62"
+    assert firmware["update_available"] is None
+    assert firmware["notification_flag"] is True
+    assert firmware["last_check_time"] == "2026/10/26"
     assert diagnostics["counts"]["volumes"] == 2
     assert diagnostics["counts"]["disks"] == 4
     assert diagnostics["permissions"]["is_admin"] is True
@@ -103,3 +108,18 @@ async def test_debug_log_has_no_secrets(hass, adm, entry) -> None:
     assert messages, "интеграция не пишет в журнал ни одной записи"
     for forbidden in ("secret", "TEST-SID", "SANITIZED", "sid=", "passport"):
         assert forbidden not in text
+
+
+async def test_diagnostics_reports_firmware_failure(hass, adm, entry) -> None:
+    """Неудачная проверка обновлений видна в разделе прошивки."""
+    await setup_integration(hass, entry)
+    adm.set_route(END_FIRMWARE, load_fixture("firmware_unavailable"))
+    await entry.runtime_data.slow.async_refresh()
+    await hass.async_block_till_done()
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+    firmware = diagnostics["firmware"]
+    assert firmware["last_check_error"] == 6215
+    assert firmware["notification_flag"] is True
+    assert diagnostics["services"]["smb"] is True

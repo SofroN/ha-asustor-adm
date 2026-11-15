@@ -241,12 +241,19 @@ class NetworkInfo:
 
 @dataclass(frozen=True, slots=True)
 class FirmwareInfo:
-    """Состояние прошивки ADM."""
+    """Состояние прошивки ADM.
+
+    ``update_available`` вычисляется после сведения с предыдущим состоянием:
+    ответ ADM подтверждает обновление только целевой версией, поэтому
+    ``None`` означает «неизвестно», а не «обновлений нет».
+    """
 
     installed_version: str | None = None
     update_available: bool | None = None
     target_version: str | None = None
     last_check_error: int | None = None
+    notification_flag: bool | None = None
+    last_check_time: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

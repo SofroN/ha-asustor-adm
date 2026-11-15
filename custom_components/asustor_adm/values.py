@@ -89,3 +89,57 @@ def ratio_percent(part: Any, total: Any) -> float | None:
     if part_number is None or total_number is None or total_number <= 0:
         return None
     return round(part_number / total_number * PERCENT, 1)
+
+
+def _version_segments(value: Any) -> tuple[str, ...] | None:
+    """Разбить версию ADM на сегменты, отбросив пробелы вокруг них.
+
+    Версия без цифр и с пустым сегментом считается непригодной для сравнения:
+    подтвердить по ней обновление нельзя.
+    """
+    text = to_text(value)
+    if text is None or not any(character.isdigit() for character in text):
+        return None
+    segments = tuple(part.strip() for part in text.split("."))
+    if any(not segment for segment in segments):
+        return None
+    return segments
+
+
+def _compare_segment(candidate: str, reference: str) -> int | None:
+    """Сравнить сегменты версии: 1 — кандидат больше, 0 — равны, -1 — меньше.
+
+    Разнотипные сегменты (число и строка) не сравниваются: пропустить
+    обновление лучше, чем объявить его без достаточного основания.
+    """
+    if candidate.isdigit() and reference.isdigit():
+        left, right = int(candidate), int(reference)
+    elif candidate.isdigit() or reference.isdigit():
+        return None
+    else:
+        left, right = candidate.lower(), reference.lower()
+    if left == right:
+        return 0
+    return 1 if left > right else -1
+
+
+def version_is_newer(candidate: Any, reference: Any) -> bool | None:
+    """Сказать, новее ли версия ADM ``candidate``, чем ``reference``.
+
+    Сегменты делятся по точкам и сравниваются слева направо: сегмент из цифр —
+    как число, иначе — как строка без учёта регистра. Версия, являющаяся
+    префиксом другой (``5.1.4`` против ``5.1.4.RM62``), не считается новее.
+    Пустое значение, отсутствие цифр и разнотипные сегменты дают ``None``:
+    версии не сравнимы, и обновление не подтверждается.
+    """
+    candidate_segments = _version_segments(candidate)
+    reference_segments = _version_segments(reference)
+    if candidate_segments is None or reference_segments is None:
+        return None
+    for left, right in zip(candidate_segments, reference_segments, strict=False):
+        result = _compare_segment(left, right)
+        if result is None:
+            return None
+        if result:
+            return result > 0
+    return False

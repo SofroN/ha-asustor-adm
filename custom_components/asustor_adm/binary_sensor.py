@@ -149,23 +149,31 @@ class ADMUpdateAvailableSensor(ADMSlowEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Вернуть последнее подтверждённое значение доступности обновления."""
+        """Вернуть подтверждённую доступность обновления.
+
+        Значение вычисляется сверкой версий, поэтому ``None`` означает
+        «неизвестно», а не «обновлений нет».
+        """
         return self._runtime.slow_data.firmware.update_available
 
     @property
     def available(self) -> bool:
-        """Быть недоступным, пока проверка обновлений не дала результата."""
+        """Быть недоступным, пока обновление не подтверждено версией."""
         return super().available and self.is_on is not None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Вернуть установленную и целевую версии прошивки."""
+        """Вернуть версии прошивки и сведения последней проверки ADM."""
         firmware = self._runtime.slow_data.firmware
         attributes: dict[str, Any] = {}
         if firmware.installed_version is not None:
             attributes["installed_version"] = firmware.installed_version
         if firmware.target_version is not None:
             attributes["target_version"] = firmware.target_version
+        if firmware.notification_flag is not None:
+            attributes["notification_flag"] = firmware.notification_flag
+        if firmware.last_check_time is not None:
+            attributes["last_check_time"] = firmware.last_check_time
         if firmware.last_check_error is not None:
             attributes["last_check_error"] = firmware.last_check_error
         return attributes or None

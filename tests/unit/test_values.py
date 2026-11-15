@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from custom_components.asustor_adm.values import (
     bytes_to_gib,
     kb_to_mib,
     ratio_percent,
     to_flag,
     to_number,
+    version_is_newer,
 )
 
 
@@ -48,3 +53,39 @@ def test_to_flag_handles_heterogeneous_values() -> None:
     assert to_flag("false") is False
     assert to_flag("") is None
     assert to_flag(None) is None
+
+
+@pytest.mark.parametrize(
+    ("candidate", "reference", "expected"),
+    [
+        ("5.1.5.RN11", "5.1.4.RM62", True),
+        ("5.1.4.RM62", "5.1.4.RM62", False),
+        ("5.1.3.RN1", "5.1.4.RM62", False),
+        ("RN11", "RM62", True),
+        ("10.0", "9.9", True),
+        ("5.1.4", "5.1.4.RM62", False),
+        ("5.1.4.rm62", "5.1.4.RM62", False),
+        (" 5.1.5.RN11 ", "5.1.4.RM62", True),
+    ],
+)
+def test_version_is_newer_compares_segments(
+    candidate: str, reference: str, expected: bool
+) -> None:
+    """Сегменты версий сравниваются числами и строками без учёта регистра."""
+    assert version_is_newer(candidate, reference) is expected
+
+
+@pytest.mark.parametrize(
+    ("candidate", "reference"),
+    [
+        ("", "5.1.4.RM62"),
+        (None, "5.1.4.RM62"),
+        ("5.1.4.RM62", None),
+        ("unknown", "5.1.4.RM62"),
+        ("5.1.4.", "5.1.4.RM62"),
+        ("5.1.4.2", "5.1.4.RM62"),
+    ],
+)
+def test_version_is_newer_reports_incomparable(candidate: Any, reference: Any) -> None:
+    """Непригодная версия и разнотипные сегменты не дают подтверждения."""
+    assert version_is_newer(candidate, reference) is None

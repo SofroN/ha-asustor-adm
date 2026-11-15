@@ -233,23 +233,28 @@ def test_parse_tasks() -> None:
 
 
 def test_parse_firmware() -> None:
-    """Установленная версия и признак обновления разбираются."""
+    """Флаг уведомления и время проверки разбираются, признак не выводится."""
     firmware = parse_firmware(load_fixture("firmware"))
     assert firmware.installed_version == "5.1.4.RM62"
-    assert firmware.update_available is True
+    assert firmware.update_available is None
+    assert firmware.notification_flag is True
+    assert firmware.last_check_time == "2026/10/26"
     assert firmware.target_version is None
 
 
 def test_parse_firmware_up_to_date() -> None:
-    """Отсутствие обновлений даёт значение False, а не None."""
-    assert parse_firmware(load_fixture("firmware_up_to_date")).update_available is False
+    """Снятый флаг уведомления тоже не превращается в признак обновления."""
+    firmware = parse_firmware(load_fixture("firmware_up_to_date"))
+    assert firmware.update_available is None
+    assert firmware.notification_flag is False
 
 
 def test_parse_firmware_with_target() -> None:
     """Подтверждённая целевая версия попадает в разобранные сведения."""
-    assert parse_firmware(load_fixture("firmware_with_target")).target_version == (
-        "5.1.5.RN11"
-    )
+    firmware = parse_firmware(load_fixture("firmware_with_target"))
+    assert firmware.target_version == "5.1.5.RN11"
+    assert firmware.notification_flag is True
+    assert firmware.last_check_time == "2026/11/14"
 
 
 def test_parse_app_updates() -> None:
