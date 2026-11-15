@@ -108,6 +108,27 @@ Assistant. Каждый опрос обращается к NAS, поэтому �
 - UPS не поддерживается: API ADM отдаёт только конфигурацию, без состояния
   батареи.
 
+## Тесты
+
+Быстрый набор не требует Home Assistant (80 тестов: клиент API, разбор ответов,
+преобразование значений, манифест и переводы):
+
+```bash
+pip install pytest pytest-asyncio pytest-aiohttp aiohttp
+python -m pytest tests/unit -q --confcutdir=tests/unit
+```
+
+Полный набор (174 теста: config flow, сущности, координаторы, диагностика)
+запускается с установленным Home Assistant:
+
+```bash
+pip install -r requirements_test.txt
+python -m pytest -q
+```
+
+В CI на каждый пуш выполняются линт и быстрый набор; полный набор запускается
+вручную: Actions → CI → Run workflow → `full_suite`.
+
 ## Диагностика
 
 Выгрузка диагностики содержит версию ADM, состояние сервисов и ошибки

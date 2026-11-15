@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 
-ROOT = pathlib.Path(__file__).parents[1]
+ROOT = pathlib.Path(__file__).parents[2]
 COMPONENT = ROOT / "custom_components" / "asustor_adm"
 REQUIRED_MANIFEST_KEYS = ("domain", "config_flow", "iot_class", "version")
 

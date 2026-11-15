@@ -4,10 +4,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      full_suite:
+        description: "Полный набор тестов (скачает Home Assistant, ~500 МБ)"
+        type: boolean
+        default: false
 
 jobs:
-  check:
-    name: lint и тесты
+  fast:
+    name: lint и быстрые тесты
     runs-on: main
     steps:
       - name: Получить исходники
@@ -21,10 +27,30 @@ jobs:
       - name: Проверить линт и формат
         run: |
           set -eo pipefail
-          uv run --no-project ruff check .
-          uv run --no-project ruff format --check .
+          uvx ruff check .
+          uvx ruff format --check .
 
-      - name: Прогнать тесты
+      - name: Быстрые тесты без Home Assistant
+        run: |
+          set -eo pipefail
+          uv run --no-project \
+            --with pytest --with pytest-asyncio --with pytest-aiohttp --with aiohttp \
+            python -m pytest tests/unit -q --confcutdir=tests/unit -p no:cacheprovider
+
+  full:
+    name: полный набор тестов
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_suite }}
+    runs-on: main
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Прогнать полный набор
         run: |
           set -eo pipefail
           uv venv .venv --python 3.13

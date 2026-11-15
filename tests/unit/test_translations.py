@@ -6,7 +6,7 @@ import json
 import pathlib
 from typing import Any
 
-COMPONENT = pathlib.Path(__file__).parents[1] / "custom_components" / "asustor_adm"
+COMPONENT = pathlib.Path(__file__).parents[2] / "custom_components" / "asustor_adm"
 
 
 def _keys(payload: Any, prefix: str = "") -> set[str]:

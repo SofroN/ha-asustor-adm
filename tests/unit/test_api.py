@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import aiohttp
@@ -106,9 +107,11 @@ async def test_request_uses_form_template_empty_body_and_no_cache_buster() -> No
 
 
 async def test_real_transport_sends_content_length_zero(
-    aiohttp_server: Any, socket_enabled: Any
+    aiohttp_server: Any, request: pytest.FixtureRequest
 ) -> None:
     """Настоящий HTTP-сервер видит `Content-Length: 0` и `sid` в query."""
+    with contextlib.suppress(pytest.FixtureLookupError):
+        request.getfixturevalue("socket_enabled")
     seen: list[web.Request] = []
 
     async def handler(request: web.Request) -> web.Response:
