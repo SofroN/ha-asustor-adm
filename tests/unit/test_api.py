@@ -15,6 +15,7 @@ from custom_components.asustor_adm.const import END_ACTIVITY, END_LOGIN, END_POW
 from custom_components.asustor_adm.exceptions import (
     ADMAuthError,
     ADMConnectionError,
+    ADMPermissionError,
     ADMResponseError,
     ADMSessionExpiredError,
     ADMTwoFactorRequiredError,
@@ -229,7 +230,7 @@ async def test_invalid_json_raises_response_error() -> None:
 
 
 async def test_two_factor_login_is_reported() -> None:
-    """Ответ с признаком двухфакторной авторизации даёт отдельную ошибку."""
+    """Код 5034 в ответе авторизации даёт отдельную ошибку двухфакторной авторизации."""
     session = FakeSession([load_fixture("login_two_factor")])
     client = _client(session)
 
@@ -266,9 +267,14 @@ async def test_power_command_uses_get_with_action() -> None:
         ({"success": True}, None),
         ({"success": True, "error_code": 0}, None),
         ({"installed_version": "5.1.4.RM62"}, None),
-        ({"success": False, "error_code": 6300}, ADMResponseError),
+        ({"success": False, "error_code": 6300}, ADMPermissionError),
         ({"success": False, "error_code": 5000}, ADMSessionExpiredError),
         ({"error_code": 6215}, ADMResponseError),
+        # Текст отказа распознаётся у прошивок, которые не дают отдельного кода.
+        (
+            {"success": False, "error_code": 0, "error_msg": "Access denied"},
+            ADMPermissionError,
+        ),
     ],
 )
 def test_check_envelope_forms(payload: dict[str, Any], expected: type | None) -> None:
@@ -278,3 +284,13 @@ def test_check_envelope_forms(payload: dict[str, Any], expected: type | None) ->
     else:
         with pytest.raises(expected):
             check_envelope(payload)
+
+
+def test_permission_denied_keeps_code_and_message() -> None:
+    """Отказ в доступе несёт исходный код и текст, не превращаясь в потерю данных."""
+    with pytest.raises(ADMPermissionError) as err:
+        check_envelope(load_fixture("error_business"))
+
+    assert isinstance(err.value, ADMResponseError)
+    assert err.value.code == 6300
+    assert err.value.message == "operation not permitted"

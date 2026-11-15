@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 from helpers import load_fixture, setup_integration
-from homeassistant.config_entries import SOURCE_USER
+from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.asustor_adm.const import (
@@ -19,8 +20,12 @@ from custom_components.asustor_adm.const import (
     CONF_VERIFY_SSL,
     DOMAIN,
     END_ACTIVITY,
+    END_SYSINFO,
 )
-from custom_components.asustor_adm.exceptions import ADMConnectionError
+from custom_components.asustor_adm.exceptions import (
+    ADMConnectionError,
+    ADMSessionExpiredError,
+)
 
 USER_INPUT = {
     CONF_HOST: "nas.example.com",
@@ -92,6 +97,71 @@ async def test_user_flow_reports_two_factor(hass, adm) -> None:
     assert result["errors"] == {"base": "two_factor"}
 
 
+async def test_user_flow_reports_insufficient_privileges(hass, adm) -> None:
+    """Отказ чтения у учётной записи без прав даёт отдельную причину.
+
+    ADM 5.1.4 отклоняет чтение тем же телом, что и истёкшую сессию
+    (`error_session_expired.json`), поэтому причину подтверждает флаг прав
+    из ответа авторизации.
+    """
+    adm.login_payload = load_fixture("login_limited")
+    adm.set_route(END_SYSINFO, load_fixture("error_session_expired"))
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "insufficient_privileges"}
+    assert hass.config_entries.async_entries(DOMAIN) == []
+
+
+async def test_user_flow_reports_explicit_access_denial(hass, adm) -> None:
+    """Явный отказ по правам даёт ту же причину и у администратора."""
+    adm.set_route(END_SYSINFO, load_fixture("error_business"))
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "insufficient_privileges"}
+    assert hass.config_entries.async_entries(DOMAIN) == []
+
+
+async def test_user_flow_accepts_limited_account(hass, adm) -> None:
+    """Учётная запись без прав администратора работает, если чтение проходит."""
+    adm.login_payload = load_fixture("login_limited")
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == "SN012345678"
+
+
+async def test_user_flow_keeps_unknown_for_admin(hass, adm) -> None:
+    """Отказ чтения у администратора остаётся непредвиденной ошибкой."""
+    adm.error_paths[END_SYSINFO.path] = ADMSessionExpiredError()
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "unknown"}
+
+
 async def test_options_flow_applies_new_interval(hass, adm, entry) -> None:
     """Новый интервал применяется к существующей записи без перезапуска."""
     await setup_integration(hass, entry)
@@ -131,3 +201,112 @@ async def test_reauth_flow_restores_entry(hass, adm, entry) -> None:
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert entry.data[CONF_PASSWORD] == "new-secret"
+
+
+def _schema_defaults(schema: Any) -> dict[str, Any]:
+    """Вернуть значения по умолчанию полей формы по именам ключей."""
+    defaults: dict[str, Any] = {}
+    for marker in schema.schema:
+        default = getattr(marker, "default", None)
+        defaults[marker.schema] = default() if callable(default) else None
+    return defaults
+
+
+async def test_reconfigure_form_is_prefilled(hass, adm, entry) -> None:
+    """Форма перенастройки предзаполнена данными записи, кроме пароля."""
+    await setup_integration(hass, entry)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    defaults = _schema_defaults(result["data_schema"])
+    assert defaults[CONF_HOST] == "nas.example.com"
+    assert defaults[CONF_PORT] == 8001
+    assert defaults[CONF_USE_SSL] is True
+    assert defaults[CONF_VERIFY_SSL] is False
+    assert defaults[CONF_USERNAME] == "admin"
+    assert defaults[CONF_PASSWORD] is None
+
+
+async def test_reconfigure_updates_connection(hass, adm, entry) -> None:
+    """Перенастройка меняет адрес и пароль, не создавая новую запись."""
+    await setup_integration(hass, entry)
+    entry_id = entry.entry_id
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {**USER_INPUT, CONF_HOST: "nas2.example.com", CONF_PASSWORD: "new-secret"},
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.entry_id == entry_id
+    assert entry.data[CONF_HOST] == "nas2.example.com"
+    assert entry.data[CONF_PASSWORD] == "new-secret"
+    assert entry.unique_id == "SN012345678"
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+
+
+async def test_reconfigure_keeps_entry_on_probe_failure(hass, adm, entry) -> None:
+    """Неудачная проверка сохраняет прежние параметры записи."""
+    await setup_integration(hass, entry)
+    adm.login_payload = {"success": False}
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {**USER_INPUT, CONF_HOST: "nas2.example.com", CONF_PASSWORD: "new-secret"},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_auth"}
+    assert entry.data[CONF_HOST] == "nas.example.com"
+    assert entry.data[CONF_PASSWORD] == "secret"
+
+
+async def test_reconfigure_adopts_serial_number(hass, adm, entry) -> None:
+    """Появившийся серийный номер заменяет идентификатор-адрес."""
+    hass.config_entries.async_update_entry(entry, unique_id="nas.example.com")
+    await setup_integration(hass, entry)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**USER_INPUT, CONF_PORT: 8002}
+    )
+    await hass.async_block_till_done()
+
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.unique_id == "SN012345678"
+    assert entry.data[CONF_PORT] == 8002
+
+
+async def test_reconfigure_rejects_other_nas(hass, adm, entry) -> None:
+    """Другой серийный номер отклоняется: для него нужна отдельная запись."""
+    hass.config_entries.async_update_entry(entry, unique_id="SN000000000")
+    await setup_integration(hass, entry)
+    before = dict(entry.data)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {**USER_INPUT, CONF_HOST: "nas2.example.com", CONF_PASSWORD: "new-secret"},
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "wrong_device"
+    assert entry.data == before
+    assert entry.unique_id == "SN000000000"

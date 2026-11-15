@@ -21,6 +21,14 @@ class ADMResponseError(ADMError):
         super().__init__(f"ADM error {code}: {message or 'no message'}")
 
 
+class ADMPermissionError(ADMResponseError):
+    """ADM отклонил запрос из-за недостатка прав учётной записи.
+
+    Наследуется от :class:`ADMResponseError`, чтобы существующие обработчики
+    неуспешного ответа (код ошибки, деградация цикла) продолжали работать.
+    """
+
+
 class ADMSessionExpiredError(ADMError):
     """Сессия ADM недействительна (код 5000)."""
 

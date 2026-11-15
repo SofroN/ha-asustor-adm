@@ -19,6 +19,7 @@ from .const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     LOGIN_TIMEOUT,
+    PERMISSION_DENIED_CODES,
     POWER_RESTART,
     POWER_SHUTDOWN,
     POWER_SUSPEND,
@@ -28,6 +29,7 @@ from .const import (
 from .exceptions import (
     ADMAuthError,
     ADMConnectionError,
+    ADMPermissionError,
     ADMPowerError,
     ADMResponseError,
     ADMSessionExpiredError,
@@ -39,6 +41,16 @@ _LOGGER = logging.getLogger(__name__)
 
 _CONTENT_TYPE: Final = "application/x-www-form-urlencoded"
 _TWO_FACTOR_HINTS: Final = ("two-step", "two_step", "twostep", "otp", "verify")
+#: Признаки отказа в доступе в тексте ошибки: прошивки без отдельного кода
+#: сообщают о запрете только словами.
+_PERMISSION_DENIED_TEXT: Final = (
+    "not permitted",
+    "permission denied",
+    "access denied",
+    "not allowed",
+    "insufficient privilege",
+    "no permission",
+)
 _POWER_ACTIONS: Final = {
     POWER_SHUTDOWN: POWER_SHUTDOWN,
     POWER_RESTART: POWER_RESTART,
@@ -65,20 +77,48 @@ def check_envelope(payload: Mapping[str, Any]) -> None:
     без обоих полей — полезные данные (так отвечает, например,
     `firmwarestatus.cgi?act=get_static_info`).
     """
-    error_code = payload.get("error_code")
-    if isinstance(error_code, str):
-        error_code = int(error_code) if error_code.isdigit() else None
+    error_code = _error_code(payload)
     if payload.get("success") is True:
         return
     message = to_text(payload.get("error_msg"))
     if "success" in payload:
-        if error_code == ERR_SESSION_INVALID:
-            raise ADMSessionExpiredError
-        raise ADMResponseError(error_code, message)
+        _raise_for_failure(error_code, message)
     if error_code not in (None, ERR_NONE):
-        if error_code == ERR_SESSION_INVALID:
-            raise ADMSessionExpiredError
-        raise ADMResponseError(error_code, message)
+        _raise_for_failure(error_code, message)
+
+
+def _error_code(payload: Mapping[str, Any]) -> int | None:
+    """Вернуть код ошибки ответа числом, если он есть."""
+    error_code = payload.get("error_code")
+    if isinstance(error_code, bool):
+        return None
+    if isinstance(error_code, str):
+        return int(error_code) if error_code.isdigit() else None
+    return error_code if isinstance(error_code, int) else None
+
+
+def _raise_for_failure(code: int | None, message: str | None) -> None:
+    """Поднять ошибку по коду и тексту неуспешного ответа.
+
+    Код 5000 остаётся признаком истёкшей сессии: клиент обязан повторить
+    авторизацию, а не сообщать о правах. Явный отказ в доступе получает
+    отдельный тип, потому что в потоке настройки это отдельная причина.
+    """
+    if code == ERR_SESSION_INVALID:
+        raise ADMSessionExpiredError
+    if _is_permission_denied(code, message):
+        raise ADMPermissionError(code, message)
+    raise ADMResponseError(code, message)
+
+
+def _is_permission_denied(code: int | None, message: str | None) -> bool:
+    """Сказать, сообщает ли ADM об отказе в доступе кодом или текстом."""
+    if code in PERMISSION_DENIED_CODES:
+        return True
+    if message is None:
+        return False
+    text = message.lower()
+    return any(marker in text for marker in _PERMISSION_DENIED_TEXT)
 
 
 def _decode(text: str) -> dict[str, Any]:

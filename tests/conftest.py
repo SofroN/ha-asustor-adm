@@ -64,6 +64,8 @@ class FakeADMClient:
         self.power_actions: list[str] = []
         self.failing_paths: set[str] = set()
         self.failing_params: dict[str, set[Any]] = {}
+        #: Заданные ответные ошибки по пути эндпоинта; остальные маршруты не меняются.
+        self.error_paths: dict[str, Exception] = {}
         self.login_payload: dict[str, Any] = load_fixture("login")
         self.login_calls = 0
         self.fail_login: Exception | None = None
@@ -128,6 +130,8 @@ class FakeADMClient:
         """Вернуть записанный ответ или сымитировать сбой."""
         self.requests.append((endpoint.path, endpoint.act))
         self.params.append(dict(params) if params else None)
+        if endpoint.path in self.error_paths:
+            raise self.error_paths[endpoint.path]
         if endpoint.path in self.auth_error_paths:
             raise ADMAuthError("fake auth error")
         if endpoint.path in self.failing_paths:

@@ -13,6 +13,18 @@
           "password": "Password"
         }
       },
+      "reconfigure": {
+        "title": "Reconfigure connection",
+        "description": "Change the address, TLS settings or credentials. The connection check must reach the same NAS.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "use_ssl": "Use HTTPS",
+          "verify_ssl": "Verify TLS certificate",
+          "username": "Username",
+          "password": "Password"
+        }
+      },
       "reauth_confirm": {
         "title": "Reauthenticate",
         "description": "The ADM session has expired. Enter the password for account {username}.",
@@ -25,11 +37,13 @@
       "invalid_auth": "ADM rejected the credentials",
       "cannot_connect": "Could not connect to the NAS",
       "two_factor": "Two-factor authentication is enabled for this account and is not supported yet",
+      "insufficient_privileges": "Insufficient privileges: an account in the ADM administrators group is required",
       "unknown": "Unexpected error"
     },
     "abort": {
       "already_configured": "This NAS is already configured",
-      "reauth_entry_missing": "The config entry for reauthentication was not found"
+      "reauth_entry_missing": "The config entry for reauthentication was not found",
+      "wrong_device": "Another NAS responds at this address: it needs a separate integration entry"
     }
   },
   "options": {

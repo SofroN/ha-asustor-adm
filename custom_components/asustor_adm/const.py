@@ -53,6 +53,10 @@ ERROR_CODES: Final = frozenset(
     }
 )
 
+#: Коды, которыми ADM сообщает об отказе в доступе. Код 6300 приходит с текстом
+#: `operation not permitted`, когда чтение запрещено правами учётной записи.
+PERMISSION_DENIED_CODES: Final = frozenset({ERR_DEVICE_REJECTED})
+
 HTTP_METHOD_POST: Final = "post"
 HTTP_METHOD_GET: Final = "get"
 
