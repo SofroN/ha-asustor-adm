@@ -1,0 +1,16 @@
+{
+  "domain": "asustor_adm",
+  "name": "ASUSTOR NAS (ADM)",
+  "codeowners": [
+    "@SofroN"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/SofroN/ha-asustor-adm",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/SofroN/ha-asustor-adm/issues",
+  "loggers": [
+    "custom_components.asustor_adm"
+  ],
+  "version": "0.1.0"
+}

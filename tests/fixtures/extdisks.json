@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "usb-disk": "enabled",
+  "support-Btrfs": "no",
+  "disks": [
+    {
+      "alias": "USB2",
+      "type": "USB 3.2 Gen 1",
+      "slot": 2,
+      "ejectable": false,
+      "vendor": "WDC",
+      "model": "WD20NMVW-11EDZS6",
+      "devicesize": 2000363192320,
+      "fstype": "ntfs",
+      "status": "ready",
+      "capacity": 2000363188224,
+      "free": 76087934976,
+      "label": null
+    },
+    {
+      "alias": "USB31",
+      "type": "USB 3.2 Gen 1",
+      "slot": 3,
+      "ejectable": false,
+      "vendor": "TOSHIBA",
+      "model": "MQ01UBD100",
+      "devicesize": 1000202043392,
+      "fstype": "ntfs",
+      "status": "ready",
+      "capacity": 1000202039296,
+      "free": 329615601664,
+      "label": "TOSHIBA EXT"
+    }
+  ]
+}

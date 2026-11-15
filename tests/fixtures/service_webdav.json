@@ -1,0 +1,7 @@
+{
+  "success": true,
+  "webdav_switch": 1,
+  "webdav_enable": 1,
+  "webdav_port": 9800,
+  "webdav_ssl_enable": 1
+}

@@ -1,0 +1,7 @@
+{
+  "success": true,
+  "ssh_enable": 0,
+  "ssh_port": 22,
+  "sftp_enable": 0,
+  "error_code": 0
+}

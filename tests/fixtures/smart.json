@@ -1,0 +1,86 @@
+{
+  "success": true,
+  "infos": [
+    {
+      "id": 1,
+      "attribute": "Raw_Read_Error_Rate",
+      "value": "83",
+      "worst": "64",
+      "threshold": "6",
+      "raw_value": "208420602",
+      "state": "Healthy"
+    },
+    {
+      "id": 3,
+      "attribute": "Spin_Up_Time",
+      "value": "98",
+      "worst": "98",
+      "threshold": "0",
+      "raw_value": "0",
+      "state": "Healthy"
+    },
+    {
+      "id": 4,
+      "attribute": "Start_Stop_Count",
+      "value": "100",
+      "worst": "100",
+      "threshold": "20",
+      "raw_value": "204",
+      "state": "Healthy"
+    },
+    {
+      "id": 5,
+      "attribute": "Reallocated_Sector_Ct",
+      "value": "100",
+      "worst": "100",
+      "threshold": "10",
+      "raw_value": "0",
+      "state": "Healthy"
+    },
+    {
+      "id": 7,
+      "attribute": "Seek_Error_Rate",
+      "value": "83",
+      "worst": "60",
+      "threshold": "45",
+      "raw_value": "193396555",
+      "state": "Healthy"
+    },
+    {
+      "id": 9,
+      "attribute": "Power_On_Hours",
+      "value": "80",
+      "worst": "80",
+      "threshold": "0",
+      "raw_value": "17678h+41m+50.811s",
+      "state": "Healthy"
+    },
+    {
+      "id": 10,
+      "attribute": "Spin_Retry_Count",
+      "value": "100",
+      "worst": "100",
+      "threshold": "97",
+      "raw_value": "0",
+      "state": "Healthy"
+    },
+    {
+      "id": 194,
+      "attribute": "Temperature_Celsius",
+      "value": "60",
+      "worst": "40",
+      "threshold": "0",
+      "raw_value": "40",
+      "state": "Healthy"
+    },
+    {
+      "id": 197,
+      "attribute": "Current_Pending_Sector",
+      "value": "100",
+      "worst": "100",
+      "threshold": "0",
+      "raw_value": "0",
+      "state": "Healthy"
+    }
+  ]
+}

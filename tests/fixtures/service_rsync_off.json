@@ -1,0 +1,5 @@
+{
+  "success": true,
+  "rsync_enable": "FALSE",
+  "server_port": "873"
+}

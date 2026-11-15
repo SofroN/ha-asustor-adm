@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "data": [
+    {
+      "app_name": "file_explorer",
+      "unique_id": 0,
+      "event_time": 1793122047,
+      "pid": -1,
+      "user": "admin",
+      "msg": "text.txt",
+      "progress": 100,
+      "byte_rate": 0,
+      "status": "ended",
+      "can_cancel": true,
+      "error": 0,
+      "src_dir": "",
+      "dest_dir": "",
+      "has_error_list": false,
+      "task": "Delete"
+    }
+  ]
+}

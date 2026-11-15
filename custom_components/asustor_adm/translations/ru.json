@@ -1,0 +1,203 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Подключение к ASUSTOR NAS",
+        "description": "Укажите адрес NAS и учётную запись ADM. Для самоподписанного сертификата отключите проверку TLS.",
+        "data": {
+          "host": "Адрес",
+          "port": "Порт",
+          "use_ssl": "Использовать HTTPS",
+          "verify_ssl": "Проверять TLS-сертификат",
+          "username": "Учётная запись",
+          "password": "Пароль"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Повторная авторизация",
+        "description": "Сессия ADM истекла. Введите пароль для учётной записи {username}.",
+        "data": {
+          "password": "Пароль"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "ADM отклонил учётные данные",
+      "cannot_connect": "Не удалось подключиться к NAS",
+      "two_factor": "Для учётной записи включена двухфакторная авторизация, она пока не поддерживается",
+      "unknown": "Непредвиденная ошибка"
+    },
+    "abort": {
+      "already_configured": "Этот NAS уже настроен",
+      "reauth_entry_missing": "Запись для переавторизации не найдена"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Интервалы опроса",
+        "description": "Быстрый цикл обновляет ресурсы и диски, медленный — сервисы, обновления и внешние диски. Частый опрос мешает дискам NAS засыпать.",
+        "data": {
+          "fast_interval": "Интервал быстрого опроса, с",
+          "slow_interval": "Интервал медленного опроса, с"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cpu_usage": {
+        "name": "Загрузка процессора"
+      },
+      "cpu_core_usage": {
+        "name": "Загрузка ядра {index}"
+      },
+      "cpu_temperature": {
+        "name": "Температура процессора"
+      },
+      "load_1": {
+        "name": "Средняя нагрузка за 1 мин"
+      },
+      "load_5": {
+        "name": "Средняя нагрузка за 5 мин"
+      },
+      "load_15": {
+        "name": "Средняя нагрузка за 15 мин"
+      },
+      "memory_used": {
+        "name": "Использовано памяти"
+      },
+      "memory_used_percent": {
+        "name": "Доля использованной памяти"
+      },
+      "uptime": {
+        "name": "Время работы"
+      },
+      "ip_address": {
+        "name": "IP-адрес"
+      },
+      "wan_ip": {
+        "name": "Внешний IP-адрес"
+      },
+      "fan_speed": {
+        "name": "Обороты кулера {index}"
+      },
+      "network_rx": {
+        "name": "Приём по интерфейсу {name}"
+      },
+      "network_tx": {
+        "name": "Передача по интерфейсу {name}"
+      },
+      "volume_capacity": {
+        "name": "Объём тома {volume}"
+      },
+      "volume_used": {
+        "name": "Занято на томе {volume}"
+      },
+      "volume_used_percent": {
+        "name": "Заполнение тома {volume}"
+      },
+      "disk_temperature": {
+        "name": "Температура диска {disk}"
+      },
+      "disk_read": {
+        "name": "Чтение с диска {disk}"
+      },
+      "disk_write": {
+        "name": "Запись на диск {disk}"
+      },
+      "disk_smart": {
+        "name": "SMART диска {disk}"
+      },
+      "sessions": {
+        "name": "Активные сессии"
+      },
+      "app_updates": {
+        "name": "Обновления App Central"
+      },
+      "active_tasks": {
+        "name": "Активные задачи"
+      },
+      "external_disk_capacity": {
+        "name": "Объём внешнего диска {disk}"
+      },
+      "external_disk_free": {
+        "name": "Свободно на внешнем диске {disk}"
+      },
+      "external_disk_used_percent": {
+        "name": "Заполнение внешнего диска {disk}"
+      }
+    },
+    "binary_sensor": {
+      "volume_problem": {
+        "name": "Проблема тома {volume}"
+      },
+      "disk_problem": {
+        "name": "Проблема диска {disk}"
+      },
+      "adm_update_available": {
+        "name": "Доступно обновление ADM"
+      },
+      "service_smb": {
+        "name": "Сервис SMB"
+      },
+      "service_nfs": {
+        "name": "Сервис NFS"
+      },
+      "service_ftp": {
+        "name": "Сервис FTP"
+      },
+      "service_webdav": {
+        "name": "Сервис WebDAV"
+      },
+      "service_ssh": {
+        "name": "Сервис SSH"
+      },
+      "service_sftp": {
+        "name": "Сервис SFTP"
+      },
+      "service_rsync": {
+        "name": "Сервис rsync"
+      },
+      "service_snmp": {
+        "name": "Сервис SNMP"
+      },
+      "service_tftp": {
+        "name": "Сервис TFTP"
+      },
+      "external_disk_present": {
+        "name": "Внешний диск {disk} подключён"
+      },
+      "external_disk_ready": {
+        "name": "Внешний диск {disk} готов"
+      }
+    },
+    "button": {
+      "shutdown": {
+        "name": "Выключение",
+        "description": "Выключает NAS. Прерывается работа всех служб NAS, включая активные записи и передачи данных."
+      },
+      "restart": {
+        "name": "Перезагрузка",
+        "description": "Перезагружает NAS. Прерывается работа всех служб NAS, включая активные записи и передачи данных."
+      },
+      "suspend": {
+        "name": "Сон",
+        "description": "Переводит NAS в сон. Службы NAS останавливаются до выхода из режима сна."
+      }
+    },
+    "update": {
+      "firmware": {
+        "name": "Прошивка ADM"
+      }
+    }
+  },
+  "exceptions": {
+    "power_failed": {
+      "message": "NAS не принял команду {action}"
+    },
+    "install_not_supported": {
+      "message": "Установка обновлений ADM из Home Assistant не поддерживается"
+    }
+  }
+}

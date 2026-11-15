@@ -1,0 +1,203 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Подключение к ASUSTOR NAS",
+        "description": "Укажите адрес NAS и учётную запись ADM. Для самоподписанного сертификата отключите проверку TLS.",
+        "data": {
+          "host": "Адрес",
+          "port": "Порт",
+          "use_ssl": "Использовать HTTPS",
+          "verify_ssl": "Проверять TLS-сертификат",
+          "username": "Учётная запись",
+          "password": "Пароль"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Повторная авторизация",
+        "description": "Сессия ADM истекла. Введите пароль для учётной записи {username}.",
+        "data": {
+          "password": "Пароль"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "ADM отклонил учётные данные",
+      "cannot_connect": "Не удалось подключиться к NAS",
+      "two_factor": "Для учётной записи включена двухфакторная авторизация, она пока не поддерживается",
+      "unknown": "Непредвиденная ошибка"
+    },
+    "abort": {
+      "already_configured": "Этот NAS уже настроен",
+      "reauth_entry_missing": "Запись для переавторизации не найдена"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Интервалы опроса",
+        "description": "Быстрый цикл обновляет ресурсы и диски, медленный — сервисы, обновления и внешние диски. Частый опрос мешает дискам NAS засыпать.",
+        "data": {
+          "fast_interval": "Интервал быстрого опроса, с",
+          "slow_interval": "Интервал медленного опроса, с"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cpu_usage": {
+        "name": "CPU usage"
+      },
+      "cpu_core_usage": {
+        "name": "CPU core {index} usage"
+      },
+      "cpu_temperature": {
+        "name": "CPU temperature"
+      },
+      "load_1": {
+        "name": "Load average 1 min"
+      },
+      "load_5": {
+        "name": "Load average 5 min"
+      },
+      "load_15": {
+        "name": "Load average 15 min"
+      },
+      "memory_used": {
+        "name": "Memory used"
+      },
+      "memory_used_percent": {
+        "name": "Memory utilization"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "ip_address": {
+        "name": "IP address"
+      },
+      "wan_ip": {
+        "name": "WAN IP address"
+      },
+      "fan_speed": {
+        "name": "Fan {index} speed"
+      },
+      "network_rx": {
+        "name": "Network {name} receive"
+      },
+      "network_tx": {
+        "name": "Network {name} transmit"
+      },
+      "volume_capacity": {
+        "name": "Volume {volume} capacity"
+      },
+      "volume_used": {
+        "name": "Volume {volume} used space"
+      },
+      "volume_used_percent": {
+        "name": "Volume {volume} utilization"
+      },
+      "disk_temperature": {
+        "name": "{disk} temperature"
+      },
+      "disk_read": {
+        "name": "{disk} read"
+      },
+      "disk_write": {
+        "name": "{disk} write"
+      },
+      "disk_smart": {
+        "name": "{disk} SMART"
+      },
+      "sessions": {
+        "name": "Active sessions"
+      },
+      "app_updates": {
+        "name": "App Central updates"
+      },
+      "active_tasks": {
+        "name": "Active tasks"
+      },
+      "external_disk_capacity": {
+        "name": "External disk {disk} capacity"
+      },
+      "external_disk_free": {
+        "name": "External disk {disk} free space"
+      },
+      "external_disk_used_percent": {
+        "name": "External disk {disk} used"
+      }
+    },
+    "binary_sensor": {
+      "volume_problem": {
+        "name": "Volume {volume} problem"
+      },
+      "disk_problem": {
+        "name": "{disk} problem"
+      },
+      "adm_update_available": {
+        "name": "ADM update available"
+      },
+      "service_smb": {
+        "name": "SMB service"
+      },
+      "service_nfs": {
+        "name": "NFS service"
+      },
+      "service_ftp": {
+        "name": "FTP service"
+      },
+      "service_webdav": {
+        "name": "WebDAV service"
+      },
+      "service_ssh": {
+        "name": "SSH service"
+      },
+      "service_sftp": {
+        "name": "SFTP service"
+      },
+      "service_rsync": {
+        "name": "rsync service"
+      },
+      "service_snmp": {
+        "name": "SNMP service"
+      },
+      "service_tftp": {
+        "name": "TFTP service"
+      },
+      "external_disk_present": {
+        "name": "External disk {disk} connected"
+      },
+      "external_disk_ready": {
+        "name": "External disk {disk} ready"
+      }
+    },
+    "button": {
+      "shutdown": {
+        "name": "Shutdown",
+        "description": "Shuts the NAS down. All NAS services stop, including active recordings and data transfers."
+      },
+      "restart": {
+        "name": "Restart",
+        "description": "Restarts the NAS. All NAS services stop, including active recordings and data transfers."
+      },
+      "suspend": {
+        "name": "Sleep",
+        "description": "Puts the NAS into sleep mode. All NAS services stop until the NAS is woken up."
+      }
+    },
+    "update": {
+      "firmware": {
+        "name": "ADM firmware"
+      }
+    }
+  },
+  "exceptions": {
+    "power_failed": {
+      "message": "NAS did not accept the {action} command"
+    },
+    "install_not_supported": {
+      "message": "Installing ADM updates from Home Assistant is not supported"
+    }
+  }
+}

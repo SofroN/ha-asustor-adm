@@ -1,0 +1,24 @@
+{
+  "fan_speed": [
+    776
+  ],
+  "success": true,
+  "aid": "user@example.com",
+  "model": "AS3304T",
+  "cpu": "AArch64 Processor",
+  "mem": 2048,
+  "serial": "SN012345678",
+  "os": "5.1.4.RM62",
+  "timezone": "(UTC/GMT+00:00) UTC",
+  "time": "1794681504",
+  "year": 2026,
+  "month": 11,
+  "day": 14,
+  "hour": 21,
+  "minute": 38,
+  "DateFormat": 8,
+  "TimeFormat": 1,
+  "uptime": "1672376",
+  "bios": "1.14",
+  "bootloader": ""
+}

@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "rsync_enable": "TRUE",
+  "server_port": "873",
+  "transmit_via_ssh": "FALSE"
+}

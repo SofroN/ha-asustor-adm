@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "enabled": false,
+  "tftp_options": {
+    "username": "root",
+    "timeout": 3
+  }
+}

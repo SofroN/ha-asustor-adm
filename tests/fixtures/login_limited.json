@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "account": "viewer",
+  "sid": "SANITIZED-SID",
+  "isadministrators": false,
+  "isAdminGroup": 1,
+  "auth_type": 0,
+  "vendor": "ASUSTOR",
+  "webman": "ADM",
+  "passport": "SANITIZED-PASSPORT",
+  "nickname": "",
+  "resource": "",
+  "serverlocation": "US",
+  "storage": "normal",
+  "volfull": "0",
+  "buzzer": {
+    "warning": "off",
+    "error": "off"
+  },
+  "media": {
+    "transcode": "ask"
+  },
+  "pwdexp_warn_type": 0,
+  "pwdexp_warn_days": -1,
+  "advpwd_ver": 2,
+  "osbit": 64,
+  "chassis": "tower",
+  "canhotplug": true,
+  "cansuspend": false,
+  "haslaststate": true,
+  "haslcm": false,
+  "canwol": false,
+  "canwow": true,
+  "hashdmi": false,
+  "hasmyarchive": true,
+  "hasotbakup": true
+}

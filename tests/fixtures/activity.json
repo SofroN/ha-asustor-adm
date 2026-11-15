@@ -1,0 +1,97 @@
+{
+  "success": true,
+  "cpucount": 4,
+  "avgload1": "2.28",
+  "avgload5": "2.21",
+  "avgload15": "2.22\n",
+  "cpus": [
+    {
+      "cpu": 1,
+      "usage": 4
+    },
+    {
+      "cpu": 2,
+      "usage": 3
+    },
+    {
+      "cpu": 3,
+      "usage": 5
+    },
+    {
+      "cpu": 4,
+      "usage": 3
+    }
+  ],
+  "memtotal": 1983612,
+  "memused": 693264,
+  "memcached": 717220,
+  "membuffer": 293536,
+  "netcount": 4,
+  "net": [
+    {
+      "name": "Lan1",
+      "enable": true,
+      "tx": 1,
+      "rx": 1
+    },
+    {
+      "name": "Wifi",
+      "enable": false
+    },
+    {
+      "name": "Usb4Net1",
+      "enable": false
+    },
+    {
+      "name": "Usb4Net2",
+      "enable": false
+    }
+  ],
+  "diskcount": 4,
+  "disks": [
+    {
+      "did": 0,
+      "name": "sdc",
+      "boxname": "AS3304T",
+      "dispname": "AS3304T",
+      "port": 1,
+      "slot": 1,
+      "style": "tower",
+      "read": 0,
+      "write": 10
+    },
+    {
+      "did": 1,
+      "name": "sdd",
+      "boxname": "AS3304T",
+      "dispname": "AS3304T",
+      "port": 1,
+      "slot": 2,
+      "style": "tower",
+      "read": 0,
+      "write": 10
+    },
+    {
+      "did": 2,
+      "name": "sda",
+      "boxname": "AS3304T",
+      "dispname": "AS3304T",
+      "port": 1,
+      "slot": 3,
+      "style": "tower",
+      "read": 0,
+      "write": 0
+    },
+    {
+      "did": 3,
+      "name": "sdb",
+      "boxname": "AS3304T",
+      "dispname": "AS3304T",
+      "port": 1,
+      "slot": 4,
+      "style": "tower",
+      "read": 0,
+      "write": 0
+    }
+  ]
+}

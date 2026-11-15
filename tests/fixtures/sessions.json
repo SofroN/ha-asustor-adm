@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "total": 1,
+  "datas": [
+    {
+      "time": 1794681364,
+      "user": "admin",
+      "protocol": 2,
+      "pid": -1,
+      "sid": "SANITIZED-USER-SID",
+      "access_resource": "-",
+      "from": "192.168.77.119",
+      "same_ip": 1,
+      "current_connection": 1
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "server": "nas",
+  "dns": "192.168.77.3 77.88.8.8 ",
+  "dns2": "",
+  "gw": "Lan1",
+  "gwip": "192.168.77.1",
+  "wanip": "",
+  "netif": [
+    {
+      "name": "LAN1",
+      "status": true,
+      "mac": "00:00:5e:00:53:a7",
+      "ipv4": "192.168.77.5",
+      "ipv6": "fe80::200:5eff:fe00:53a7/64",
+      "laggmode": ""
+    }
+  ]
+}

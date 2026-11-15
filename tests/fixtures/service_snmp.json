@@ -1,0 +1,7 @@
+{
+  "success": true,
+  "enable_snmp": 1,
+  "enable_snmp_v1v2": 1,
+  "enable_snmp_v3": 1,
+  "rocommunity": "public"
+}

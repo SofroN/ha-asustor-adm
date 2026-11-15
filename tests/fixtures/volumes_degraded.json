@@ -1,0 +1,74 @@
+{
+  "success": true,
+  "basemodel": "AS3304T",
+  "model": "AS3304T",
+  "cachesup": false,
+  "raid50": false,
+  "bay": 4,
+  "sysvol": 1,
+  "volumes": [
+    {
+      "vid": 1,
+      "boxid": 0,
+      "boxname": "AS3304T",
+      "dispname": "AS3304T",
+      "style": "tower",
+      "port": 1,
+      "level": "single",
+      "state": "healthy",
+      "fstype": "ext4",
+      "used": 4742786965504,
+      "capacity": 7932738306048,
+      "ready": true,
+      "cache": false,
+      "cachestate": "unknown",
+      "disks": [
+        {
+          "did": 3,
+          "boxid": 0,
+          "boxname": "AS3304T",
+          "dispname": "AS3304T",
+          "style": "tower",
+          "port": 1,
+          "slot": 4
+        }
+      ]
+    },
+    {
+      "vid": 2,
+      "boxid": 0,
+      "boxname": "AS3304T",
+      "dispname": "AS3304T",
+      "style": "tower",
+      "port": 1,
+      "level": "raid1",
+      "state": "degraded",
+      "fstype": "ext4",
+      "used": 922609385472,
+      "capacity": 1963301756928,
+      "ready": true,
+      "cache": false,
+      "cachestate": "unknown",
+      "disks": [
+        {
+          "did": 0,
+          "boxid": 0,
+          "boxname": "AS3304T",
+          "dispname": "AS3304T",
+          "style": "tower",
+          "port": 1,
+          "slot": 1
+        },
+        {
+          "did": 1,
+          "boxid": 0,
+          "boxname": "AS3304T",
+          "dispname": "AS3304T",
+          "style": "tower",
+          "port": 1,
+          "slot": 2
+        }
+      ]
+    }
+  ]
+}
