@@ -43,7 +43,7 @@ openspec validate --all --strict                          # валидация �
 
 `pytest.ini` задаёт `asyncio_mode = auto`, `testpaths = tests`, `pythonpath = . tests`; `pytest.ini` уже включает `-q`. Для быстрого набора нужны `pytest`, `pytest-asyncio`, `pytest-aiohttp`, `aiohttp`; для полного — `pip install -r requirements_test.txt`.
 
-CI (`.github/workflows/ci.yml`) работает на self-hosted runner с меткой `main`: на каждый пуш и pull request — `ruff check`, `ruff format --check` и быстрый набор; полный набор запускается вручную (`Run workflow` → `full_suite`). Перед шагами workflow проверяет наличие `node` на хосте.
+CI — один файл `.github/workflows/ci.yml` на два хостинга: и GitHub Actions, и Forgejo Actions ищут workflow в `.github/workflows`. Метка раннера берётся из переменной репозитория `CI_RUNNER` (`runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}`): на Forgejo она задана как `main` (self-hosted act_runner), на GitHub не задана и подставляется `ubuntu-latest` (публичный репозиторий, минуты не тарифицируются). На каждый пуш и pull request — `ruff check`, `ruff format --check` и быстрый набор; полный набор запускается вручную (`Run workflow` → `full_suite`). Метка, для которой нет онлайн-раннера, оставляет job в очереди навсегда — это и была причина «pipeline ждёт раннера» на GitHub.
 
 ## Проверки перед завершением задачи
 

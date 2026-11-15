@@ -1,5 +1,11 @@
 name: CI
 
+# Один файл обслуживает два хостинга: GitHub Actions и Forgejo Actions.
+# Метка раннера берётся из переменной репозитория CI_RUNNER: на Forgejo она
+# равна `main` (self-hosted act_runner), на GitHub не задана и подставляется
+# стандартный `ubuntu-latest` (публичный репозиторий — минуты не тарифицируются).
+# Контекст `vars` разрешён в runs-on в обоих движках.
+
 on:
   push:
     branches: [main]
@@ -14,9 +20,11 @@ on:
 jobs:
   fast:
     name: lint и быстрые тесты
-    runs-on: main
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
-      - name: Проверить node и установить при отсутствии
+      # JS-действия требуют node на хосте: на self-hosted его может не быть,
+      # на стандартном раннере GitHub шаг сразу выходит по первой ветке.
+      - name: Подготовить node
         run: |
           set -eo pipefail
           if command -v node >/dev/null 2>&1; then
@@ -24,9 +32,10 @@ jobs:
             exit 0
           fi
           echo "node не найден, устанавливаю из репозитория Debian"
+          apt() { if [ "$(id -u)" -eq 0 ]; then apt-get "$@"; else sudo apt-get "$@"; fi; }
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends nodejs
+          apt update -qq
+          apt install -y -qq --no-install-recommends nodejs
           node -v
 
       - name: Получить исходники
@@ -53,9 +62,9 @@ jobs:
   full:
     name: полный набор тестов
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_suite }}
-    runs-on: main
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
-      - name: Проверить node и установить при отсутствии
+      - name: Подготовить node
         run: |
           set -eo pipefail
           if command -v node >/dev/null 2>&1; then
@@ -63,9 +72,10 @@ jobs:
             exit 0
           fi
           echo "node не найден, устанавливаю из репозитория Debian"
+          apt() { if [ "$(id -u)" -eq 0 ]; then apt-get "$@"; else sudo apt-get "$@"; fi; }
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends nodejs
+          apt update -qq
+          apt install -y -qq --no-install-recommends nodejs
           node -v
 
       - name: Получить исходники
