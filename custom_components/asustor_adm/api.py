@@ -16,6 +16,7 @@ from .const import (
     END_POWER,
     ERR_NONE,
     ERR_SESSION_INVALID,
+    ERR_TWO_STEP_REQUIRED,
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     LOGIN_TIMEOUT,
@@ -40,7 +41,6 @@ from .values import to_flag, to_text
 _LOGGER = logging.getLogger(__name__)
 
 _CONTENT_TYPE: Final = "application/x-www-form-urlencoded"
-_TWO_FACTOR_HINTS: Final = ("two-step", "two_step", "twostep", "otp", "verify")
 #: Признаки отказа в доступе в тексте ошибки: прошивки без отдельного кода
 #: сообщают о запрете только словами.
 _PERMISSION_DENIED_TEXT: Final = (
@@ -168,7 +168,14 @@ class ADMClient:
 
     async def async_login(self) -> ADMLogin:
         """Авторизоваться и сохранить флаги возможностей устройства."""
-        form = {"account": self._account, "password": self._password, "stay": "yes"}
+        # `two-step-auth` интерфейс ADM передаёт всегда: при выключенной 2FA
+        # параметр игнорируется, при включённой — устройство требует код (5034).
+        form = {
+            "account": self._account,
+            "password": self._password,
+            "two-step-auth": "true",
+            "stay": "yes",
+        }
         try:
             payload = await self._async_send(
                 END_LOGIN, form=form, timeout=LOGIN_TIMEOUT, with_sid=False
@@ -176,9 +183,7 @@ class ADMClient:
         except ADMResponseError as err:
             raise ADMAuthError(f"login rejected with code {err.code}") from err
         if payload.get("success") is not True:
-            if any(
-                key.startswith(hint) for key in payload for hint in _TWO_FACTOR_HINTS
-            ):
+            if _error_code(payload) == ERR_TWO_STEP_REQUIRED:
                 raise ADMTwoFactorRequiredError
             raise ADMAuthError("login rejected")
         sid = to_text(payload.get("sid"))
@@ -251,6 +256,8 @@ class ADMClient:
         query: dict[str, str] = {}
         if endpoint.act is not None:
             query["act"] = endpoint.act
+        for key, value in endpoint.params:
+            query[key] = value
         if with_sid and self._login is not None:
             query["sid"] = self._login.sid
         if params:

@@ -7,6 +7,7 @@ from custom_components.asustor_adm.const import (
     END_ACTIVITY,
     END_LOGIN,
     END_POWER,
+    END_SESSIONS,
     ERROR_CODES,
     FAST_CYCLE_ENDPOINTS,
     SERVICE_DEFINITIONS,
@@ -30,7 +31,7 @@ def test_domain_and_endpoint_path() -> None:
 def test_error_codes_have_no_duplicates() -> None:
     """Коды ошибок уникальны и содержат ожидаемый набор."""
     assert len(ERROR_CODES) == len(set(ERROR_CODES))
-    assert {5000, 5005, 6209, 6215, 6300} == ERROR_CODES
+    assert {5000, 5005, 5034, 6209, 6215, 6300} == ERROR_CODES
 
 
 def test_fast_cycle_endpoints_are_unique() -> None:
@@ -63,3 +64,31 @@ def test_service_definitions_are_unique() -> None:
     sftp = next(item for item in SERVICE_DEFINITIONS if item.key == "sftp")
     assert ssh.endpoint == sftp.endpoint
     assert len(SERVICE_ENDPOINTS) == 8
+
+
+def test_service_endpoints_carry_required_tab() -> None:
+    """Модули служб, которым ADM требует параметр `tab`, получают его в запросе."""
+    expected = {
+        "smb": ("tab", "cifs"),
+        "nfs": ("tab", "Nfs_Get_Enable"),
+        "ftp": ("tab", "general"),
+        "webdav": ("tab", "webdav"),
+        "snmp": ("tab", "Get"),
+    }
+    for definition in SERVICE_DEFINITIONS:
+        params = dict(definition.endpoint.params)
+        if definition.key in expected:
+            key, value = expected[definition.key]
+            assert params == {key: value}, definition.key
+        else:
+            assert params == {}, definition.key
+
+
+def test_sessions_endpoint_carries_paging_parameters() -> None:
+    """Список сессий запрашивается с параметрами постраничности: без них ADM отвечает 5302."""
+    assert dict(END_SESSIONS.params) == {
+        "sort": "0",
+        "ascend": "0",
+        "start": "0",
+        "limit": "100",
+    }

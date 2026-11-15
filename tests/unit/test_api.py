@@ -11,7 +11,13 @@ from aiohttp import web
 from helpers import load_fixture
 
 from custom_components.asustor_adm.api import ADMClient, check_envelope
-from custom_components.asustor_adm.const import END_ACTIVITY, END_LOGIN, END_POWER
+from custom_components.asustor_adm.const import (
+    END_ACTIVITY,
+    END_LOGIN,
+    END_POWER,
+    END_SESSIONS,
+    SERVICE_DEFINITIONS,
+)
 from custom_components.asustor_adm.exceptions import (
     ADMAuthError,
     ADMConnectionError,
@@ -236,6 +242,39 @@ async def test_two_factor_login_is_reported() -> None:
 
     with pytest.raises(ADMTwoFactorRequiredError):
         await client.async_login()
+
+
+async def test_login_sends_two_step_auth_flag() -> None:
+    """Авторизация передаёт признак двухфакторной авторизации, как интерфейс ADM."""
+    session = FakeSession([LOGIN_OK])
+    client = _client(session)
+
+    await client.async_login()
+
+    assert b"two-step-auth=true" in session.calls[0]["data"]
+
+
+async def test_endpoint_contract_parameters_are_sent() -> None:
+    """Параметры контракта эндпоинта попадают в query каждого запроса."""
+    smb = next(item for item in SERVICE_DEFINITIONS if item.key == "smb")
+    session = FakeSession([LOGIN_OK, load_fixture("service_smb")])
+    client = _client(session)
+    await client.async_request(smb.endpoint)
+
+    assert session.calls[1]["params"]["tab"] == "cifs"
+
+    session = FakeSession([LOGIN_OK, load_fixture("sessions")])
+    client = _client(session)
+    await client.async_request(END_SESSIONS)
+
+    assert session.calls[1]["params"] == {
+        "act": "list",
+        "sort": "0",
+        "ascend": "0",
+        "start": "0",
+        "limit": "100",
+        "sid": "SID-1",
+    }
 
 
 async def test_connection_error_is_mapped() -> None:

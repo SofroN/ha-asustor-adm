@@ -29,6 +29,7 @@ from custom_components.asustor_adm.const import (
     END_TASKS,
     END_VOLUME_GET,
     END_VOLUME_LIST,
+    ERR_TWO_STEP_REQUIRED,
     SERVICE_DEFINITIONS,
 )
 from custom_components.asustor_adm.exceptions import (
@@ -102,11 +103,7 @@ class FakeADMClient:
         if self.fail_login is not None:
             raise self.fail_login
         if self.login_payload.get("success") is not True:
-            if any(
-                key.startswith(hint)
-                for key in self.login_payload
-                for hint in ("two-step", "two_step", "otp", "verify")
-            ):
+            if self.login_payload.get("error_code") == ERR_TWO_STEP_REQUIRED:
                 raise ADMTwoFactorRequiredError
             raise ADMAuthError("login rejected")
         self._login = ADMLogin(

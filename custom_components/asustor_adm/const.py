@@ -34,21 +34,24 @@ LOGIN_TIMEOUT: Final = 5
 ERR_NONE: Final = 0
 #: Сессия ADM недействительна или истекла — единственный код, требующий повторной авторизации.
 ERR_SESSION_INVALID: Final = 5000
-#: Нет локальных данных о доступности обновления.
-ERR_UPDATE_NO_DATA: Final = 5005
-#: Проверка обновления невозможна.
-ERR_UPDATE_UNAVAILABLE: Final = 6209
-#: Проверка обновления на сервере не удалась.
-ERR_UPDATE_CHECK_FAILED: Final = 6215
+#: Нет связи с сервером обновлений ASUSTOR (проверка обновлений невозможна).
+ERR_UPDATE_CANNOT_CONNECT: Final = 5005
+#: Установлена последняя версия ADM — новее нет.
+ERR_UPDATE_LATEST: Final = 6209
+#: Предлагаемая версия совпадает с установленной.
+ERR_UPDATE_SAME_VERSION: Final = 6215
+#: Учётной записи требуется одноразовый код двухфакторной авторизации.
+ERR_TWO_STEP_REQUIRED: Final = 5034
 #: Устройство отклонило запрос.
 ERR_DEVICE_REJECTED: Final = 6300
 
 ERROR_CODES: Final = frozenset(
     {
         ERR_SESSION_INVALID,
-        ERR_UPDATE_NO_DATA,
-        ERR_UPDATE_UNAVAILABLE,
-        ERR_UPDATE_CHECK_FAILED,
+        ERR_TWO_STEP_REQUIRED,
+        ERR_UPDATE_CANNOT_CONNECT,
+        ERR_UPDATE_LATEST,
+        ERR_UPDATE_SAME_VERSION,
         ERR_DEVICE_REJECTED,
     }
 )
@@ -63,11 +66,16 @@ HTTP_METHOD_GET: Final = "get"
 
 @dataclass(frozen=True, slots=True)
 class Endpoint:
-    """Эндпоинт API ADM: путь собирается из модуля и имени CGI."""
+    """Эндпоинт API ADM: путь собирается из модуля и имени CGI.
+
+    ``params`` — параметры запроса, которых требует контракт ADM: без них
+    устройство отвечает кодом 5302 и сведений не отдаёт.
+    """
 
     module: str
     name: str
     act: str | None = None
+    params: tuple[tuple[str, str], ...] = ()
 
     @property
     def path(self) -> str:
@@ -86,7 +94,14 @@ END_DISK_LIST: Final = Endpoint("storageManager", "disk_smart.cgi", "list")
 END_DISK_SMART: Final = Endpoint("storageManager", "disk_smart.cgi", "smart")
 END_SYSINFO_NET: Final = Endpoint("information", "sysinfo.cgi", "net")
 END_SYSINFO_WAN: Final = Endpoint("information", "sysinfo.cgi", "wan")
-END_SESSIONS: Final = Endpoint("information", "onlineuser.cgi", "list")
+#: Без параметров постраничности `onlineuser.cgi` отвечает кодом 5302.
+SESSIONS_PAGING: Final = (
+    ("sort", "0"),
+    ("ascend", "0"),
+    ("start", "0"),
+    ("limit", "100"),
+)
+END_SESSIONS: Final = Endpoint("information", "onlineuser.cgi", "list", SESSIONS_PAGING)
 END_EXT_DISK: Final = Endpoint("external", "extdisk.cgi", "list")
 END_TASKS: Final = Endpoint("taskmonitor", "taskmonitor.cgi", "task_list")
 END_FIRMWARE: Final = Endpoint("settings", "firmwarestatus.cgi", "get_static_info")
@@ -122,12 +137,26 @@ class ServiceDefinition:
     field: str
 
 
+#: Часть модулей отдаёт настройки только вместе с параметром `tab`: без него
+#: ADM отвечает кодом 5302 с текстом `tab`, и сведений о сервисе не получить.
 SERVICE_DEFINITIONS: Final = (
-    ServiceDefinition("smb", Endpoint("services", "windows.cgi", "get"), "enable"),
-    ServiceDefinition("nfs", Endpoint("services", "nfs.cgi", "get"), "IsEnabled"),
-    ServiceDefinition("ftp", Endpoint("services", "ftp.cgi", "get"), "enable"),
     ServiceDefinition(
-        "webdav", Endpoint("services", "http.cgi", "get"), "webdav_enable"
+        "smb", Endpoint("services", "windows.cgi", "get", (("tab", "cifs"),)), "enable"
+    ),
+    ServiceDefinition(
+        "nfs",
+        Endpoint("services", "nfs.cgi", "get", (("tab", "Nfs_Get_Enable"),)),
+        "IsEnabled",
+    ),
+    ServiceDefinition(
+        "ftp",
+        Endpoint("services", "ftp.cgi", "get", (("tab", "general"),)),
+        "enable",
+    ),
+    ServiceDefinition(
+        "webdav",
+        Endpoint("services", "http.cgi", "get", (("tab", "webdav"),)),
+        "webdav_enable",
     ),
     ServiceDefinition("ssh", Endpoint("services", "terminal.cgi", "get"), "ssh_enable"),
     ServiceDefinition(
@@ -136,7 +165,11 @@ SERVICE_DEFINITIONS: Final = (
     ServiceDefinition(
         "rsync", Endpoint("services", "rsync.cgi", "get_sets"), "rsync_enable"
     ),
-    ServiceDefinition("snmp", Endpoint("services", "snmp.cgi", "get"), "enable_snmp"),
+    ServiceDefinition(
+        "snmp",
+        Endpoint("services", "snmp.cgi", "get", (("tab", "Get"),)),
+        "enable_snmp",
+    ),
     ServiceDefinition(
         "tftp", Endpoint("services", "tftp_server.cgi", "get"), "enabled"
     ),
@@ -149,10 +182,9 @@ SERVICE_ENDPOINTS: Final = tuple(
     dict.fromkeys(definition.endpoint for definition in SERVICE_DEFINITIONS)
 )
 
-#: Знак «проверка обновлений недоступна» — ответ считается неуспешным, значение не меняется.
-UPDATE_UNAVAILABLE_CODES: Final = frozenset(
-    {ERR_UPDATE_NO_DATA, ERR_UPDATE_UNAVAILABLE, ERR_UPDATE_CHECK_FAILED}
-)
+#: Коды проверки обновлений, означающие «новее нет»: не сбой, а подтверждённый ответ.
+#: Коды контекстны для каждого CGI: 5005 у `volume.cgi` значит «нет такого тома».
+UPDATE_UP_TO_DATE_CODES: Final = frozenset({ERR_UPDATE_LATEST, ERR_UPDATE_SAME_VERSION})
 
 POWER_SHUTDOWN: Final = "shutdown"
 POWER_RESTART: Final = "restart"
