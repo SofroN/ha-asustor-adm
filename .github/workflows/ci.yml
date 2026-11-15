@@ -9,22 +9,42 @@ jobs:
   lint:
     name: ruff
     runs-on: main
+    env:
+      REPO_SERVER: ${{ github.server_url }}
+      REPO_NAME: ${{ github.repository }}
+      REPO_SHA: ${{ github.sha }}
+      REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Получить исходники
         run: |
-          set -euo pipefail
-          server="${GITHUB_SERVER_URL#*://}"
-          git clone --quiet "http://oauth2:${GITHUB_TOKEN}@${server}/${GITHUB_REPOSITORY}.git" repo
+          set -eo pipefail
+          export GIT_SSL_NO_VERIFY=1
+          echo "== окружение =="
+          env | grep -E '^(CI|GITHUB_|RUNNER_)' | sed -E 's/(TOKEN|SECRET|KEY)=.*/\1=***/' | sort
+          echo "== clone =="
+          host_path="${REPO_SERVER#*://}"
+          if [ -n "${REPO_TOKEN}" ]; then
+            clone_url="http://oauth2:${REPO_TOKEN}@${host_path}/${REPO_NAME}.git"
+          else
+            clone_url="${REPO_SERVER}/${REPO_NAME}.git"
+          fi
+          echo "using ${clone_url%%/SofroN*}"
+          git clone --quiet "${clone_url}" repo || {
+            echo "клон с токеном не удался, пробуем анонимно по http";
+            git clone --quiet "http://${host_path}/${REPO_NAME}.git" repo;
+          }
           cd repo
-          git checkout --quiet "${GITHUB_SHA}"
+          git checkout --quiet "${REPO_SHA}"
+          git log --oneline -1
       - name: Установить uv
         run: |
-          set -euo pipefail
+          set -eo pipefail
           command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+          "$HOME/.local/bin/uv" --version || uv --version
       - name: Проверить код
         working-directory: repo
         run: |
-          set -euo pipefail
+          set -eo pipefail
           uv_bin="$HOME/.local/bin/uv"
           [ -x "$uv_bin" ] || uv_bin="$(command -v uv)"
           "$uv_bin" run --no-project ruff check .
@@ -33,22 +53,37 @@ jobs:
   tests:
     name: pytest
     runs-on: main
+    env:
+      REPO_SERVER: ${{ github.server_url }}
+      REPO_NAME: ${{ github.repository }}
+      REPO_SHA: ${{ github.sha }}
+      REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Получить исходники
         run: |
-          set -euo pipefail
-          server="${GITHUB_SERVER_URL#*://}"
-          git clone --quiet "http://oauth2:${GITHUB_TOKEN}@${server}/${GITHUB_REPOSITORY}.git" repo
+          set -eo pipefail
+          export GIT_SSL_NO_VERIFY=1
+          host_path="${REPO_SERVER#*://}"
+          if [ -n "${REPO_TOKEN}" ]; then
+            clone_url="http://oauth2:${REPO_TOKEN}@${host_path}/${REPO_NAME}.git"
+          else
+            clone_url="${REPO_SERVER}/${REPO_NAME}.git"
+          fi
+          git clone --quiet "${clone_url}" repo || {
+            echo "клон с токеном не удался, пробуем анонимно по http";
+            git clone --quiet "http://${host_path}/${REPO_NAME}.git" repo;
+          }
           cd repo
-          git checkout --quiet "${GITHUB_SHA}"
+          git checkout --quiet "${REPO_SHA}"
+          git log --oneline -1
       - name: Установить uv
         run: |
-          set -euo pipefail
+          set -eo pipefail
           command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Прогнать тесты
         working-directory: repo
         run: |
-          set -euo pipefail
+          set -eo pipefail
           uv_bin="$HOME/.local/bin/uv"
           [ -x "$uv_bin" ] || uv_bin="$(command -v uv)"
           "$uv_bin" venv .venv --python 3.13
