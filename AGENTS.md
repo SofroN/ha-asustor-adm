@@ -25,7 +25,7 @@
   - `strings.json`, `translations/en.json`, `translations/ru.json` — строки интерфейса;
   - `manifest.json`, `brand/` — манифест и иконки.
 - `tests/unit/` — быстрый набор без Home Assistant (131 тестов);
-- `tests/` — полный набор с Home Assistant (244 тестов);
+- `tests/` — полный набор с Home Assistant (248 тестов);
 - `tests/fixtures/` — санитизированные ответы ADM, правила пополнения — [README.md](tests/fixtures/README.md);
 - `openspec/` — спецификации `specs/`, активные изменения `changes/`, архив `changes/archive/`;
 - `.github/workflows/ci.yml` — проверки на пуш и pull request;
@@ -39,7 +39,7 @@
 
 ```bash
 python3 -m pytest tests/unit -q --confcutdir=tests/unit   # быстрый набор, 131 тестов, без Home Assistant
-python3 -m pytest -q                                      # полный набор, 244 тестов, нужен Home Assistant
+python3 -m pytest -q                                      # полный набор, 248 тестов, нужен Home Assistant
 python3 -m ruff check .                                   # линт
 python3 -m ruff format --check .                          # проверка формата (переформат: без --check)
 python3 scripts/bump_version.py --level patch --dry-run   # что изменится при выпуске patch
@@ -111,6 +111,7 @@ openspec validate --all --strict    # если менялись спеки
 - Докстринги и комментарии — по-русски, короткие; комментарий объясняет инвариант или неочевидное решение, а не повторяет код.
 - Логирование: `debug` для штатной деградации (недоступный эндпоинт, неудачная проверка обновлений), `warning` только для неожиданной структуры ответа; без параметров запроса и секретов.
 - Ошибки — типизированные из `exceptions.py`; наружу из платформ отдаётся `HomeAssistantError` с ключом перевода.
+- Иконки сущностей: явная `mdi`-иконка задаётся, только если `device_class` не различает смысл (проценты без класса, приём и передача сети, чтение и запись диска, кнопки питания); дублировать класс устройства нельзя, а имена берутся из набора, который использует сам Home Assistant. Правило проверяет `tests/test_icons.py`.
 - README синхронизируется с кодом: состав сущностей, интервалы по умолчанию, число тестов в разделе «Тесты».
 
 ## Коммиты

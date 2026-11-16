@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -40,6 +40,12 @@ _LOGGER = logging.getLogger(__name__)
 
 _SPEED_UNIT = UnitOfDataRate.KILOBYTES_PER_SECOND
 _SLOW_SMART_PARAMS = {"page": 1, "start": 0, "limit": 25}
+
+# Иконки нужны только там, где `device_class` не различает смысл: у сети и диска
+# один `data_rate` на два разных направления, а у процентов класса нет вовсе.
+_NETWORK_ICONS: Final = {"rx": "mdi:download-network", "tx": "mdi:upload-network"}
+_DISK_SPEED_ICONS: Final = {"read": "mdi:download", "write": "mdi:upload"}
+_UTILIZATION_ICON: Final = "mdi:chart-donut"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -106,6 +112,7 @@ FAST_SENSORS: tuple[ADMFastSensorDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
+        icon="mdi:memory",
         value_fn=lambda data: data.activity.memory_used_percent,
     ),
     ADMFastSensorDescription(
@@ -515,6 +522,7 @@ def _build_dynamic_sensors(
                     unit=_SPEED_UNIT,
                     state_class=SensorStateClass.MEASUREMENT,
                     precision=1,
+                    icon=_NETWORK_ICONS.get(direction),
                 )
             )
         elif key.startswith("volume_"):
@@ -556,6 +564,7 @@ def _build_dynamic_sensors(
                     unit=_SPEED_UNIT,
                     state_class=SensorStateClass.MEASUREMENT,
                     precision=1,
+                    icon=_DISK_SPEED_ICONS["read"],
                 )
             )
         elif key.endswith("_write") and key.rpartition("_")[0] in stats:
@@ -573,6 +582,7 @@ def _build_dynamic_sensors(
                     unit=_SPEED_UNIT,
                     state_class=SensorStateClass.MEASUREMENT,
                     precision=1,
+                    icon=_DISK_SPEED_ICONS["write"],
                 )
             )
         elif key.endswith("_smart") and key.rpartition("_")[0] in disks:
@@ -604,6 +614,7 @@ def _build_volume_sensor(runtime: ADMRuntime, vid: int, kind: str) -> SensorEnti
         unit=None if not (is_capacity or is_used) else UnitOfInformation.GIBIBYTES,
         state_class=SensorStateClass.MEASUREMENT,
         precision=2 if (is_capacity or is_used) else 1,
+        icon=None if (is_capacity or is_used) else _UTILIZATION_ICON,
         attributes_fn=lambda runtime, vid=vid: _volume_attributes(runtime, vid),
         also_listen_to=runtime.slow,
     )
@@ -659,6 +670,7 @@ class ADMSlowDynamicSensor(ADMSlowEntity, SensorEntity):
         device_class: SensorDeviceClass | None = None,
         unit: str | None = None,
         state_class: SensorStateClass | None = None,
+        icon: str | None = None,
         precision: int | None = None,
         attributes_fn: Callable[[SlowData], dict[str, Any] | None] | None = None,
     ) -> None:
@@ -676,6 +688,8 @@ class ADMSlowDynamicSensor(ADMSlowEntity, SensorEntity):
             self._attr_native_unit_of_measurement = unit
         if state_class is not None:
             self._attr_state_class = state_class
+        if icon is not None:
+            self._attr_icon = icon
         if precision is not None:
             self._attr_suggested_display_precision = precision
 
@@ -763,6 +777,7 @@ def _build_external_sensors(
                     unit=PERCENTAGE,
                     state_class=SensorStateClass.MEASUREMENT,
                     precision=1,
+                    icon=_UTILIZATION_ICON,
                     attributes_fn=lambda data, alias=alias: _external_attributes(
                         data, alias
                     ),
