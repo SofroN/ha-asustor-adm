@@ -24,26 +24,32 @@
   - `diagnostics.py` — выгрузка с маскированием секретов;
   - `strings.json`, `translations/en.json`, `translations/ru.json` — строки интерфейса;
   - `manifest.json`, `brand/` — манифест и иконки.
-- `tests/unit/` — быстрый набор без Home Assistant (131 тестов);
-- `tests/` — полный набор с Home Assistant (248 тестов);
+- `tests/unit/` — быстрый набор без Home Assistant (176 тестов);
+- `tests/` — полный набор с Home Assistant (293 теста);
 - `tests/fixtures/` — санитизированные ответы ADM, правила пополнения — [README.md](tests/fixtures/README.md);
 - `openspec/` — спецификации `specs/`, активные изменения `changes/`, архив `changes/archive/`;
 - `.github/workflows/ci.yml` — проверки на пуш и pull request;
-- `.github/workflows/release.yml` — выпуск версии, тег и релиз по ручному запуску;
+- `.github/workflows/release.yml` — выпуск: по пушу с большей версией в `VERSION`
+  или по ручному запуску; тег, релиз, архив плагина и список изменений;
 - `VERSION` — единственный источник номера версии; `CHANGELOG.md` — история по Keep a Changelog;
-- `scripts/bump_version.py` — bump версии, синхронизация `manifest.json` и `pyproject.toml`, раздел CHANGELOG и текст релиза;
+- `scripts/bump_version.py` — bump и синхронизация версии, раздел CHANGELOG, решение о выпуске
+  (`--state`) и текст релиза со списком коммитов (`--release-body`);
+- `scripts/build_plugin_zip.py` — детерминированный архив плагина для распаковки в `/config`;
+- `scripts/publish_release.py` — публикация релиза и архива на GitHub и Forgejo (черновик → ассет → публикация);
 - `pyproject.toml` — настройки ruff, `pytest.ini`, `requirements_test.txt`, `hacs.json`;
 - `.dsh/` — инструменты агента в рабочем каталоге, в `.gitignore`, править их не нужно.
 
 ## Команды
 
 ```bash
-python3 -m pytest tests/unit -q --confcutdir=tests/unit   # быстрый набор, 131 тестов, без Home Assistant
-python3 -m pytest -q                                      # полный набор, 248 тестов, нужен Home Assistant
+python3 -m pytest tests/unit -q --confcutdir=tests/unit   # быстрый набор, 176 тестов, без Home Assistant
+python3 -m pytest -q                                      # полный набор, 293 теста, нужен Home Assistant
 python3 -m ruff check .                                   # линт
 python3 -m ruff format --check .                          # проверка формата (переформат: без --check)
 python3 scripts/bump_version.py --level patch --dry-run   # что изменится при выпуске patch
-python3 scripts/bump_version.py --notes                   # тело релиза текущей версии
+python3 scripts/bump_version.py --notes                   # тело раздела CHANGELOG текущей версии
+python3 scripts/bump_version.py --state                   # нужен ли выпуск: версия, тег, прошлый тег
+python3 scripts/build_plugin_zip.py --version 0.2.0       # dist/asustor_adm-0.2.0.zip
 openspec validate --all --strict                          # валидация спек и изменений
 ```
 
@@ -51,7 +57,7 @@ openspec validate --all --strict                          # валидация �
 
 CI — один файл `.github/workflows/ci.yml` на два хостинга: и GitHub Actions, и Forgejo Actions ищут workflow в `.github/workflows`. Метка раннера берётся из переменной репозитория `CI_RUNNER` (`runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}`): на Forgejo она задана как `main` (self-hosted act_runner), на GitHub не задана и подставляется `ubuntu-latest` (публичный репозиторий, минуты не тарифицируются). На каждый пуш и pull request — `ruff check`, `ruff format --check` и быстрый набор; полный набор запускается вручную (`Run workflow` → `full_suite`). Метка, для которой нет онлайн-раннера, оставляет job в очереди навсегда — это и была причина «pipeline ждёт раннера» на GitHub.
 
-Версия — `VERSION` в корне (единственный источник), `manifest.json` и `pyproject.toml` производны: менять номер в них руками нельзя, только `python3 scripts/bump_version.py --level <patch|minor|major>` или `--version X.Y.Z`. Равенство трёх значений проверяет `tests/unit/test_version.py`, поэтому расхождение ломает CI, а не установку у пользователя. Выпуск — `.github/workflows/release.yml` (ручной запуск): bump файлов, коммит `chore(release): vX.Y.Z`, тег и релиз через API того хостинга, где запущен workflow; тег и релиз идемпотентны, повторный запуск добавит только недостающее. Перед выпуском изменения описываются в разделе `## [Unreleased]` файла `CHANGELOG.md` — при выпуске он становится разделом версии и текстом релиза, пустой раздел выпустить нельзя.
+Версия — `VERSION` в корне (единственный источник), `manifest.json` и `pyproject.toml` производны: менять номер в них руками нельзя, только `python3 scripts/bump_version.py --level <patch|minor|major>` или `--version X.Y.Z`. Равенство трёх значений проверяет `tests/unit/test_version.py`, поэтому расхождение ломает CI, а не установку у пользователя. Выпуск — `.github/workflows/release.yml`, и он событийный: пуш в `main`, где `VERSION` содержит больший номер, сам ставит тег `vX.Y.Z` и публикует релиз (`--sync` приводит производные файлы, `--state` решает, нужен ли выпуск). Повторный пуш с уже выпущенной версией релиза не создаёт, уменьшение номера — ошибка; ручной запуск (`level`, `version`, `current`, `dry_run`) остаётся для bump номера из интерфейса Actions. К релизу прикладываются архив `dist/asustor_adm-X.Y.Z.zip` с корнем `custom_components/asustor_adm/` (распаковка в `/config`) и текст изменений относительно прошлого тега: раздел `CHANGELOG.md` версии, коммиты с прошлого тега и ссылка сравнения. Публикация идемпотентна и атомарна: черновик → загрузка ассета → публикация, поэтому релиз без архива не появляется, а повторный запуск дозагружает недостающее. Изменения описываются в разделе `## [Unreleased]` файла `CHANGELOG.md`; пустой раздел при ручном bump выпустить нельзя.
 
 ## Проверки перед завершением задачи
 

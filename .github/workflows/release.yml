@@ -1,14 +1,27 @@
 name: Release
 
-# Выпуск версии: bump файлов версии, коммит, тег и релиз через API того
-# хостинга, где запущен workflow. Вся логика версии — в scripts/bump_version.py,
-# здесь остаются только git и HTTP. Запускается вручную из UI.
+# Выпуск версии: тег и релиз с архивом плагина и списком изменений.
+#
+# Триггеры:
+#  * push в main — если в VERSION приехал больший номер, выпуск происходит
+#    автоматически. Решение принимает scripts/bump_version.py: версия не
+#    больше последнего тега или тег уже стоит — работа завершается без
+#    действий. Исключение — тег есть, а релиза нет: прошлый запуск упал на
+#    загрузке архива, такой релиз доводится до конца.
+#  * workflow_dispatch — ручной выпуск: level/version обновляют файлы версии
+#    и CHANGELOG, current публикует уже подготовленную версию.
+#
+# Релиз собирается атомарно: черновик, загрузка архива, публикация
+# (scripts/publish_release.py). Пока архив не загружен, релиз остаётся
+# черновиком и не виден пользователям и HACS.
 #
 # Метка раннера, как и в ci.yml, берётся из переменной CI_RUNNER: на Forgejo
 # это self-hosted `main`, на GitHub переменная не задана и подставляется
 # стандартный `ubuntu-latest`.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       level:
@@ -27,6 +40,12 @@ on:
 
 permissions:
   contents: write
+
+# Два пуша подряд не должны выпускать релизы параллельно: иначе оба job
+# увидят один и тот же последний тег и попытаются создать один релиз.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -48,6 +67,8 @@ jobs:
           apt install -y -qq --no-install-recommends nodejs
           node -v
 
+      # Глубина 0 нужна дважды: теги для решения о выпуске и история для
+      # списка изменений с прошлого релиза.
       - name: Получить исходники
         uses: actions/checkout@v4
         with:
@@ -66,82 +87,148 @@ jobs:
           git config user.name "release-bot"
           git config user.email "release-bot@users.noreply.local"
 
-      - name: Выпустить версию
+      - name: Определить версию
+        id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_LEVEL: ${{ inputs.level }}
           DRY_RUN: ${{ inputs.dry_run }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -eo pipefail
-          args=()
-          if [ -n "$INPUT_VERSION" ]; then
-            args+=(--version "$INPUT_VERSION")
-          elif [ "$INPUT_LEVEL" != "current" ]; then
-            args+=(--level "$INPUT_LEVEL")
+          py() { uv run --no-project python "$@"; }
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            args=()
+            if [ -n "$INPUT_VERSION" ]; then
+              args+=(--version "$INPUT_VERSION")
+            elif [ "$INPUT_LEVEL" != "current" ]; then
+              args+=(--level "$INPUT_LEVEL")
+            fi
+            if [ "$DRY_RUN" = "true" ]; then
+              args+=(--dry-run)
+            fi
+            version=$(py scripts/bump_version.py "${args[@]}")
+          else
+            # В push-режиме номер версии готовит автор изменения: скрипт
+            # приводит к нему производные manifest.json и pyproject.toml
+            # и ничего не меняет, если они уже совпадают.
+            version=$(py scripts/bump_version.py --sync)
           fi
-          if [ "$DRY_RUN" = "true" ]; then
-            args+=(--dry-run)
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN" != "true" ]; then
+            # Ручной выпуск требует описанных изменений: пустой раздел
+            # CHANGELOG не должен превращаться в релиз без описания.
+            py scripts/bump_version.py --notes "$version" > /dev/null
           fi
-          echo "выпускается версия: $(uv run --no-project python \
-            scripts/bump_version.py "${args[@]}")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "определена версия $version"
 
-      # Тег, который уже указывает на текущий коммит, не пересоздаётся:
-      # повторный запуск добавляет только недостающий релиз.
-      - name: Закоммитить и пометить тегом
+      - name: Решить, нужен ли выпуск
+        id: state
         if: ${{ inputs.dry_run != true }}
         env:
-          BRANCH: ${{ github.ref_name }}
+          # Стандартные имена Actions: их же читает scripts/publish_release.py,
+          # поэтому локальный запуск повторяет поведение CI.
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -eo pipefail
-          tag="v$(uv run --no-project python scripts/bump_version.py)"
+          py() { uv run --no-project python "$@"; }
+          state=$(py scripts/bump_version.py --state)
+          echo "$state"
+          field() {
+            printf '%s' "$state" | py -c "import json, sys; print(json.load(sys.stdin)[\"$1\"] or '')"
+          }
+          tag=$(field tag)
+          release=$(printf '%s' "$state" | py -c \
+            'import json, sys; print("true" if json.load(sys.stdin)["should_release"] else "false")')
+          if [ "$release" = "false" ]; then
+            # Тег может стоять, а релиза не быть: прошлый запуск упал на
+            # загрузке архива. Тогда релиз доводится до конца.
+            existing=$(py scripts/publish_release.py --tag "$tag" --check)
+            echo "состояние релиза $tag: $existing"
+            if [ "$existing" = "missing" ]; then
+              release=true
+            else
+              echo "выпуск не требуется: релиз $tag уже опубликован"
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+      - name: Показать план выпуска
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eo pipefail
+          echo "был бы выпущен релиз v$VERSION"
+          echo "ассет: asustor_adm-$VERSION.zip (распаковка в /config)"
+          echo "текст: раздел CHANGELOG версии, коммиты от прошлого тега, ссылка сравнения"
+
+      # Тег, который уже указывает на текущий коммит, не пересоздаётся:
+      # повторный запуск добавляет только недостающее.
+      - name: Закоммитить и пометить тегом
+        if: steps.state.outputs.release == 'true'
+        env:
+          BRANCH: ${{ github.ref_name }}
+          TAG: ${{ steps.state.outputs.tag }}
+        run: |
+          set -eo pipefail
           git add -A
           if git diff --cached --quiet; then
             echo "файлы версии не изменились, коммит не нужен"
           else
-            git commit -m "chore(release): $tag"
+            git commit -m "chore(release): $TAG"
           fi
-          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "тег $tag уже существует"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "тег $TAG уже существует"
           else
-            git tag -a "$tag" -m "$tag"
+            git tag -a "$TAG" -m "$TAG"
           fi
           git push origin "HEAD:$BRANCH" --follow-tags
 
-      - name: Опубликовать релиз
-        if: ${{ inputs.dry_run != true }}
+      - name: Собрать архив плагина
+        id: archive
+        if: steps.state.outputs.release == 'true'
         env:
-          TOKEN: ${{ github.token }}
-          API: ${{ github.api_url }}
-          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -eo pipefail
-          tag="v$(uv run --no-project python scripts/bump_version.py)"
-          notes=$(uv run --no-project python scripts/bump_version.py --notes)
-          payload=$(printf '%s' "$notes" | uv run --no-project python -c \
-            'import json, sys
-          body = sys.stdin.read()
-          print(json.dumps({
-              "tag_name": sys.argv[1],
-              "name": sys.argv[1],
-              "body": body,
-              "draft": False,
-              "prerelease": False,
-          }))' "$tag")
-          status=$(curl -sS -o /tmp/release.json -w '%{http_code}' \
-            -H "Authorization: Bearer $TOKEN" "$API/repos/$REPO/releases/tags/$tag")
-          if [ "$status" = "200" ]; then
-            echo "релиз $tag уже опубликован"
-            exit 0
+          asset=$(uv run --no-project python scripts/build_plugin_zip.py \
+            --version "$VERSION")
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          ls -l "$asset"
+
+      - name: Собрать текст релиза
+        if: steps.state.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eo pipefail
+          uv run --no-project python scripts/bump_version.py \
+            --release-body "$VERSION" > "${RUNNER_TEMP:-/tmp}/notes.md"
+          cat "${RUNNER_TEMP:-/tmp}/notes.md"
+
+      - name: Опубликовать релиз
+        if: steps.state.outputs.release == 'true'
+        env:
+          # Стандартные имена Actions: их же читает scripts/publish_release.py,
+          # поэтому локальный запуск повторяет поведение CI.
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_ENGINE: ${{ vars.RELEASE_ENGINE }}
+          TAG: ${{ steps.state.outputs.tag }}
+          ASSET: ${{ steps.archive.outputs.asset }}
+        run: |
+          set -eo pipefail
+          args=(
+            --tag "$TAG"
+            --asset "$ASSET"
+            --notes-file "${RUNNER_TEMP:-/tmp}/notes.md"
+          )
+          if [ -n "$RELEASE_ENGINE" ]; then
+            args+=(--engine "$RELEASE_ENGINE")
           fi
-          status=$(curl -sS -o /tmp/release.json -w '%{http_code}' \
-            -X POST \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/vnd.github+json" \
-            -d "$payload" "$API/repos/$REPO/releases")
-          if [ "$status" != "201" ]; then
-            echo "не удалось создать релиз: HTTP $status" >&2
-            cat /tmp/release.json >&2
-            exit 1
-          fi
-          echo "релиз $tag создан"
+          uv run --no-project python scripts/publish_release.py "${args[@]}"

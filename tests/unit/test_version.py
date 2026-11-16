@@ -10,6 +10,8 @@ import importlib.util
 import json
 import pathlib
 import shutil
+import subprocess
+import sys
 import tomllib
 
 import pytest
@@ -27,6 +29,8 @@ def _load_bump_module():
     spec = importlib.util.spec_from_file_location("bump_version", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    # dataclass(slots=True) ищет модуль в sys.modules: регистрируем заранее.
+    sys.modules["bump_version"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -202,3 +206,264 @@ def test_changelog_notes_rejects_empty_section(tree: pathlib.Path) -> None:
     text = _read_changelog(tree)
     with pytest.raises(bump_version.VersionError):
         bump_version.changelog_notes(text, bump_version.read_version(tree))
+
+
+# --- Версия как событие выпуска: теги, решение, текст релиза -------------
+
+_CHANGELOG_BASE = """# История изменений
+
+## [Unreleased]
+
+## [0.1.0] - 2026-11-15
+
+### Добавлено
+
+- Интеграция.
+
+[Unreleased]: https://github.com/SofroN/ha-asustor-adm/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/SofroN/ha-asustor-adm/releases/tag/v0.1.0
+"""
+
+_CHANGELOG_NEXT = """# История изменений
+
+## [Unreleased]
+
+## [0.2.0] - 2026-12-01
+
+### Добавлено
+
+- Новый сенсор.
+
+## [0.1.0] - 2026-11-15
+
+### Добавлено
+
+- Интеграция.
+
+[Unreleased]: https://github.com/SofroN/ha-asustor-adm/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/SofroN/ha-asustor-adm/releases/tag/v0.2.0
+[0.1.0]: https://github.com/SofroN/ha-asustor-adm/releases/tag/v0.1.0
+"""
+
+
+def _git(root: pathlib.Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, text=True, check=True
+    )
+    return result.stdout
+
+
+@pytest.fixture()
+def repository(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Репозиторий с прошлым релизом и коммитами после него."""
+    if shutil.which("git") is None:  # pragma: no cover - среда без git
+        pytest.skip("для теста нужен git")
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "test")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    (tmp_path / "VERSION").write_text("0.1.0\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(_CHANGELOG_BASE, encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "feat: initial integration")
+    _git(tmp_path, "tag", "-a", "v0.1.0", "-m", "v0.1.0")
+    (tmp_path / "VERSION").write_text("0.2.0\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(_CHANGELOG_NEXT, encoding="utf-8")
+    _git(tmp_path, "commit", "-q", "-am", "docs(changelog): describe 0.2.0")
+    (tmp_path / "note.txt").write_text("x", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "fix(api): verified contract")
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("tag", "expected"),
+    [
+        ("v0.1.0", (0, 1, 0)),
+        ("0.1.0", None),
+        ("v0.1", None),
+        ("nightly", None),
+        ("v1.0.0-rc1", None),
+    ],
+)
+def test_parse_tag_accepts_only_version_tags(
+    tag: str, expected: tuple[int, int, int] | None
+) -> None:
+    """Тег релиза — префикс v и полный SemVer; прочие теги не версии."""
+    assert bump_version.parse_tag(tag) == expected
+
+
+@pytest.mark.parametrize(
+    ("tags", "version", "expected"),
+    [
+        (["v0.1.0", "v0.2.0", "nightly"], "0.3.0", "v0.2.0"),
+        (["v0.1.0", "v1.0.0"], "0.9.0", "v0.1.0"),
+        (["v0.1.0"], "0.1.0", None),
+        ([], "0.1.0", None),
+    ],
+)
+def test_previous_tag_is_latest_below_version(
+    tags: list[str], version: str, expected: str | None
+) -> None:
+    """Предыдущий релиз — наибольший тег строго меньше выпускаемой версии."""
+    assert bump_version.previous_tag(tags, version) == expected
+
+
+def test_release_decision_publishes_new_version() -> None:
+    """Новая версия выпускается и объясняет, после какого тега."""
+    release, reason = bump_version.release_decision("0.2.0", ["v0.1.0"])
+    assert release is True
+    assert "v0.1.0" in reason
+
+
+def test_release_decision_skips_existing_tag() -> None:
+    """Существующий тег не перевыпускается: релиз уже опубликован."""
+    release, reason = bump_version.release_decision("0.2.0", ["v0.1.0", "v0.2.0"])
+    assert release is False
+    assert "v0.2.0" in reason
+
+
+def test_release_decision_rejects_downgrade() -> None:
+    """Понижение версии — ошибка: релизы не отзываются автоматически."""
+    with pytest.raises(bump_version.VersionError):
+        bump_version.release_decision("0.1.5", ["v0.2.0"])
+
+
+def test_sync_version_aligns_derived_files_only(tree: pathlib.Path) -> None:
+    """Синхронизация правит производные файлы и не трогает CHANGELOG."""
+    manifest = tree / "custom_components" / "asustor_adm" / "manifest.json"
+    pyproject = tree / "pyproject.toml"
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace('"0.1.0"', '"9.9.9"'),
+        encoding="utf-8",
+    )
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8").replace(
+            'version = "0.1.0"', 'version = "9.9.9"'
+        ),
+        encoding="utf-8",
+    )
+    changelog_before = _read_changelog(tree)
+    version, changed = bump_version.sync_version(tree)
+    assert version == "0.1.0"
+    assert {path.name for path in changed} == {"manifest.json", "pyproject.toml"}
+    assert _read_changelog(tree) == changelog_before
+    # Повторная синхронизация ничего не меняет: коммит не появится.
+    assert bump_version.sync_version(tree)[1] == []
+
+
+def test_render_commits_groups_by_type() -> None:
+    """Список изменений группируется по смыслу и сохраняет хеши."""
+    commits = [
+        bump_version.Commit(sha="a1", subject="feat(icons): explicit icons"),
+        bump_version.Commit(sha="b2", subject="fix(api): keep contract"),
+        bump_version.Commit(sha="c3", subject="ci: single workflow"),
+        bump_version.Commit(sha="d4", subject="Update README"),
+    ]
+    text = bump_version.render_commits(commits)
+    assert text.index("#### Добавлено") < text.index("#### Исправлено")
+    assert text.index("#### Исправлено") < text.index("#### Служебное")
+    assert text.index("#### Служебное") < text.index("#### Прочее")
+    assert "`a1` feat(icons): explicit icons" in text
+    assert "`d4` Update README" in text
+
+
+def test_render_commits_returns_empty_for_no_commits() -> None:
+    """Без коммитов блок не добавляется в текст релиза."""
+    assert bump_version.render_commits([]) == ""
+
+
+def test_changelog_notes_or_none_tolerates_missing_section() -> None:
+    """В авторежиме отсутствие раздела версии не ломает сборку текста."""
+    assert bump_version.changelog_notes_or_none(_CHANGELOG_BASE, "0.2.0") is None
+    assert bump_version.changelog_notes_or_none(_CHANGELOG_BASE, "0.1.0") is not None
+
+
+def test_release_body_uses_changelog_and_commits_since_previous(
+    repository: pathlib.Path,
+) -> None:
+    """Текст релиза: раздел CHANGELOG, коммиты с прошлого тега и ссылка."""
+    body = bump_version.release_body(repository, "0.2.0")
+    assert "Новый сенсор." in body
+    assert "### Коммиты v0.1.0...v0.2.0" in body
+    assert "fix(api): verified contract" in body
+    assert "docs(changelog): describe 0.2.0" in body
+    assert "**Полный список изменений**: " in body
+    assert "compare/v0.1.0...v0.2.0" in body
+    assert "## [" not in body
+
+
+def test_release_body_without_changelog_section_uses_commits(
+    repository: pathlib.Path,
+) -> None:
+    """Без раздела CHANGELOG релиз всё равно описывает изменения."""
+    changelog = repository / "CHANGELOG.md"
+    changelog.write_text(
+        _CHANGELOG_NEXT.split("## [0.2.0]")[0]
+        + "[Unreleased]: https://github.com/SofroN/ha-asustor-adm/compare/"
+        "v0.2.0...HEAD\n[0.2.0]: https://github.com/SofroN/ha-asustor-adm/"
+        "releases/tag/v0.2.0\n[0.1.0]: https://github.com/SofroN/ha-asustor-adm/"
+        "releases/tag/v0.1.0\n",
+        encoding="utf-8",
+    )
+    body = bump_version.release_body(repository, "0.2.0")
+    assert body.startswith("### Коммиты v0.1.0...v0.2.0")
+    assert "fix(api): verified contract" in body
+
+
+def test_git_commits_skip_release_commits(repository: pathlib.Path) -> None:
+    """Служебный коммит выпуска не попадает в список изменений."""
+    (repository / "VERSION").write_text("0.2.1\n", encoding="utf-8")
+    _git(repository, "commit", "-q", "-am", "chore(release): v0.2.1")
+    commits = bump_version.git_commits(repository, "v0.1.0..HEAD")
+    assert not [item for item in commits if item.subject.startswith("chore(release)")]
+    assert commits
+
+
+def test_release_state_reports_new_version(repository: pathlib.Path) -> None:
+    """Состояние выпуска описывает версию, тег и предыдущий релиз."""
+    state = bump_version.release_state(repository)
+    assert state["version"] == "0.2.0"
+    assert state["tag"] == "v0.2.0"
+    assert state["previous_tag"] == "v0.1.0"
+    assert state["should_release"] is True
+
+
+def test_release_state_skips_published_version(repository: pathlib.Path) -> None:
+    """После установки тега повторного выпуска нет."""
+    _git(repository, "tag", "-a", "v0.2.0", "-m", "v0.2.0")
+    state = bump_version.release_state(repository)
+    assert state["should_release"] is False
+    assert state["previous_tag"] == "v0.1.0"
+
+
+def test_cli_state_prints_json(
+    repository: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--state печатает машиночитаемое решение о выпуске."""
+    assert bump_version.main(["--state"], root=repository) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["tag"] == "v0.2.0"
+    assert payload["should_release"] is True
+
+
+def test_cli_release_body_prints_notes(
+    repository: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--release-body печатает готовый текст релиза для файла заметок."""
+    assert bump_version.main(["--release-body", "0.2.0"], root=repository) == 0
+    assert "### Коммиты v0.1.0...v0.2.0" in capsys.readouterr().out
+
+
+def test_cli_sync_reports_changed_files(
+    tree: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--sync печатает версию в stdout, а изменённые файлы — в stderr."""
+    manifest = tree / "custom_components" / "asustor_adm" / "manifest.json"
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace('"0.1.0"', '"9.9.9"'),
+        encoding="utf-8",
+    )
+    assert bump_version.main(["--sync"], root=tree) == 0
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "0.1.0"
+    assert "manifest.json" in captured.err
