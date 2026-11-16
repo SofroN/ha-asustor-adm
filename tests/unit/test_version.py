@@ -144,27 +144,30 @@ def test_set_version_updates_every_file(tree: pathlib.Path) -> None:
 
 def test_cli_dry_run_keeps_files_untouched(tree: pathlib.Path) -> None:
     """Прогон с --dry-run печатает версию, но файлы не меняет."""
+    current = bump_version.read_version(tree)
     before = {
         path.name: path.read_bytes() for path in tree.rglob("*") if path.is_file()
     }
     assert bump_version.main(["--level", "patch", "--dry-run"], root=tree) == 0
     after = {path.name: path.read_bytes() for path in tree.rglob("*") if path.is_file()}
     assert before == after
-    assert bump_version.read_version(tree) == "0.1.0"
+    assert bump_version.read_version(tree) == current
 
 
 def test_cli_release_writes_version_and_changelog(tree: pathlib.Path) -> None:
     """Выпуск обновляет версию, добавляет раздел и переписывает ссылки."""
+    current = bump_version.read_version(tree)
+    target = bump_version.bump(current, "minor")
     code = bump_version.main(["--level", "minor", "--today", "2026-12-31"], root=tree)
     assert code == 0
-    assert bump_version.read_version(tree) == "0.2.0"
+    assert bump_version.read_version(tree) == target
     text = _read_changelog(tree)
-    assert "## [0.2.0] - 2026-12-31" in text
+    assert f"## [{target}] - 2026-12-31" in text
     assert "## [Unreleased]" in text
-    assert "/compare/v0.2.0...HEAD" in text
-    assert "[0.2.0]: " in text
-    # Раздел текущей версии остаётся на месте и не дублируется.
-    assert text.count("## [0.1.0]") == 1
+    assert f"/compare/v{target}...HEAD" in text
+    assert f"[{target}]: " in text
+    # Раздел прошлой версии остаётся на месте и не дублируется.
+    assert text.count(f"## [{current}]") == 1
 
 
 def test_promote_changelog_rejects_existing_version() -> None:
@@ -330,21 +333,22 @@ def test_release_decision_rejects_downgrade() -> None:
 
 def test_sync_version_aligns_derived_files_only(tree: pathlib.Path) -> None:
     """Синхронизация правит производные файлы и не трогает CHANGELOG."""
+    current = bump_version.read_version(tree)
     manifest = tree / "custom_components" / "asustor_adm" / "manifest.json"
     pyproject = tree / "pyproject.toml"
     manifest.write_text(
-        manifest.read_text(encoding="utf-8").replace('"0.1.0"', '"9.9.9"'),
+        manifest.read_text(encoding="utf-8").replace(f'"{current}"', '"9.9.9"', 1),
         encoding="utf-8",
     )
     pyproject.write_text(
         pyproject.read_text(encoding="utf-8").replace(
-            'version = "0.1.0"', 'version = "9.9.9"'
+            f'version = "{current}"', 'version = "9.9.9"', 1
         ),
         encoding="utf-8",
     )
     changelog_before = _read_changelog(tree)
     version, changed = bump_version.sync_version(tree)
-    assert version == "0.1.0"
+    assert version == current
     assert {path.name for path in changed} == {"manifest.json", "pyproject.toml"}
     assert _read_changelog(tree) == changelog_before
     # Повторная синхронизация ничего не меняет: коммит не появится.
@@ -458,12 +462,13 @@ def test_cli_sync_reports_changed_files(
     tree: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """--sync печатает версию в stdout, а изменённые файлы — в stderr."""
+    current = bump_version.read_version(tree)
     manifest = tree / "custom_components" / "asustor_adm" / "manifest.json"
     manifest.write_text(
-        manifest.read_text(encoding="utf-8").replace('"0.1.0"', '"9.9.9"'),
+        manifest.read_text(encoding="utf-8").replace(f'"{current}"', '"9.9.9"', 1),
         encoding="utf-8",
     )
     assert bump_version.main(["--sync"], root=tree) == 0
     captured = capsys.readouterr()
-    assert captured.out.strip() == "0.1.0"
+    assert captured.out.strip() == current
     assert "manifest.json" in captured.err
