@@ -318,3 +318,113 @@ def test_cli_requires_asset_and_notes(
     )
     assert code == 2
     assert "ошибка" in capsys.readouterr().err
+
+
+def test_gitea_token_uses_token_scheme() -> None:
+    """Forgejo ждёт схему token для собственных токенов."""
+    transport = FakeTransport((200, {"id": 11, "draft": False, "assets": []}))
+    _client(transport).find("v0.2.0")
+    assert transport.calls[0].headers["Authorization"] == "token secret"
+
+
+def test_github_token_uses_bearer_scheme() -> None:
+    """GitHub принимает Bearer, как и остальные его клиенты."""
+    transport = FakeTransport((200, {"id": 11, "draft": False, "assets": []}))
+    client = publish_release.ReleaseClient(
+        publish_release.Settings(
+            api_url="https://api.github.com",
+            repository="SofroN/ha-asustor-adm",
+            token="secret",
+            engine=publish_release.ENGINE_GITHUB,
+        ),
+        transport=transport,
+        log=lambda *args: None,
+    )
+    client.find("v0.2.0")
+    assert transport.calls[0].headers["Authorization"] == "Bearer secret"
+
+
+@pytest.mark.parametrize(
+    ("api_url", "server_url", "expected"),
+    [
+        ("https://forgejo.example/api/v1", "", "https://forgejo.example/api/v1"),
+        ("", "https://forgejo.example", "https://forgejo.example/api/v1"),
+        ("", "https://forgejo.example/", "https://forgejo.example/api/v1"),
+        ("", "https://github.com", "https://api.github.com"),
+        ("https://api.github.com", "https://github.com", "https://api.github.com"),
+    ],
+)
+def test_resolve_api_url(api_url: str, server_url: str, expected: str) -> None:
+    """Адрес API берётся явно или выводится из адреса сервера."""
+    assert publish_release.resolve_api_url(api_url, server_url) == expected
+
+
+def test_resolve_api_url_requires_address() -> None:
+    """Без адресов публиковать некуда."""
+    with pytest.raises(publish_release.ReleaseError):
+        publish_release.resolve_api_url("", "")
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("нет связи: [SSL: CERTIFICATE_VERIFY_FAILED] verify failed", True),
+        ("загрузка ассета: HTTP 403", False),
+    ],
+)
+def test_is_tls_error(message: str, expected: bool) -> None:
+    """Отказ из-за сертификата отличается от отказа API."""
+    error = publish_release.ReleaseError(message)
+    assert publish_release.is_tls_error(error) is expected
+
+
+class TlsFailingTransport:
+    """Транспорт, который всегда упирается в непроверенный сертификат."""
+
+    def send(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        data: bytes | None,
+    ) -> publish_release.Response:
+        raise publish_release.ReleaseError(
+            "нет связи: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed"
+        )
+
+
+def test_tls_failure_retries_without_verification(asset: pathlib.Path) -> None:
+    """Самоподписанный сертификат внутреннего Forgejo не блокирует релиз."""
+    insecure = FakeTransport(
+        (404, None),
+        (201, {"id": 11, "draft": True}),
+        (201, {"id": 21, "name": asset.name, "size": asset.stat().st_size}),
+        (200, {"id": 11, "draft": False, "html_url": "https://host/releases/v0.2.0"}),
+    )
+    client = publish_release.ReleaseClient(
+        _settings(),
+        transport=TlsFailingTransport(),
+        insecure_transport=insecure,
+        log=lambda *args: None,
+    )
+    url = client.publish(tag="v0.2.0", body="текст", asset=asset)
+    assert url == "https://host/releases/v0.2.0"
+    assert [call.method for call in insecure.calls] == ["GET", "POST", "POST", "PATCH"]
+
+
+def test_tls_failure_is_fatal_for_github(asset: pathlib.Path) -> None:
+    """Для GitHub проверка сертификата остаётся строгой."""
+    client = publish_release.ReleaseClient(
+        publish_release.Settings(
+            api_url="https://api.github.com",
+            repository="SofroN/ha-asustor-adm",
+            token="secret",
+            engine=publish_release.ENGINE_GITHUB,
+        ),
+        transport=TlsFailingTransport(),
+        insecure_transport=FakeTransport(),
+        log=lambda *args: None,
+    )
+    with pytest.raises(publish_release.ReleaseError):
+        client.publish(tag="v0.2.0", body="текст", asset=asset)

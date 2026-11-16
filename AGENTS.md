@@ -24,8 +24,8 @@
   - `diagnostics.py` — выгрузка с маскированием секретов;
   - `strings.json`, `translations/en.json`, `translations/ru.json` — строки интерфейса;
   - `manifest.json`, `brand/` — манифест и иконки.
-- `tests/unit/` — быстрый набор без Home Assistant (176 тестов);
-- `tests/` — полный набор с Home Assistant (293 теста);
+- `tests/unit/` — быстрый набор без Home Assistant (188 тестов);
+- `tests/` — полный набор с Home Assistant (305 тестов);
 - `tests/fixtures/` — санитизированные ответы ADM, правила пополнения — [README.md](tests/fixtures/README.md);
 - `openspec/` — спецификации `specs/`, активные изменения `changes/`, архив `changes/archive/`;
 - `.github/workflows/ci.yml` — проверки на пуш и pull request;
@@ -42,8 +42,8 @@
 ## Команды
 
 ```bash
-python3 -m pytest tests/unit -q --confcutdir=tests/unit   # быстрый набор, 176 тестов, без Home Assistant
-python3 -m pytest -q                                      # полный набор, 293 теста, нужен Home Assistant
+python3 -m pytest tests/unit -q --confcutdir=tests/unit   # быстрый набор, 188 тестов, без Home Assistant
+python3 -m pytest -q                                      # полный набор, 305 тестов, нужен Home Assistant
 python3 -m ruff check .                                   # линт
 python3 -m ruff format --check .                          # проверка формата (переформат: без --check)
 python3 scripts/bump_version.py --level patch --dry-run   # что изменится при выпуске patch

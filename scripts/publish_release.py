@@ -8,6 +8,11 @@
 Хостинги различаются только загрузкой вложений: GitHub принимает двоичное тело
 на ``uploads.github.com``, Forgejo — ``multipart/form-data`` с полем
 ``attachment``. Всё остальное совпадает, так как Forgejo повторяет API GitHub.
+
+Две особенности self-hosted Forgejo учтены явно: адрес API выводится из адреса
+сервера, если ``GITHUB_API_URL`` не задан, а самоподписанный сертификат не
+обрывает публикацию — запрос повторяется без проверки TLS (сервер тот же, что
+в ``GITHUB_SERVER_URL``; для GitHub такая поблажка не действует).
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ import argparse
 import json
 import os
 import pathlib
+import ssl
 import sys
 import urllib.error
 import urllib.parse
@@ -65,7 +71,24 @@ class Transport(Protocol):
 
 
 class UrllibTransport:
-    """Транспорт на стандартной библиотеке: без внешних зависимостей."""
+    """Транспорт на стандартной библиотеке: без внешних зависимостей.
+
+    ``insecure`` отключает проверку сертификата сервера: так публикуется
+    релиз на self-hosted Forgejo, сертификат которого не попал в доверенные
+    на раннере. Для GitHub режим не включается.
+    """
+
+    def __init__(self, *, insecure: bool = False) -> None:
+        self._insecure = insecure
+
+    def _context(self) -> ssl.SSLContext | None:
+        """Контекст TLS: строгий по умолчанию, без проверки — только явно."""
+        if not self._insecure:
+            return None
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context
 
     def send(
         self,
@@ -79,7 +102,9 @@ class UrllibTransport:
             url, data=data, headers=dict(headers), method=method
         )
         try:
-            with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as reply:
+            with urllib.request.urlopen(
+                request, timeout=HTTP_TIMEOUT_SECONDS, context=self._context()
+            ) as reply:
                 return Response(status=reply.status, body=reply.read())
         except urllib.error.HTTPError as error:
             # Ошибка API — это данные: тело содержит причину отказа.
@@ -104,6 +129,30 @@ def detect_engine(api_url: str) -> str:
     return ENGINE_GITHUB if host == "api.github.com" else ENGINE_GITEA
 
 
+def resolve_api_url(api_url: str, server_url: str) -> str:
+    """Адрес API: заданный явно или выведенный из адреса сервера.
+
+    Forgejo Actions не всегда передаёт ``github.api_url``, зато адрес сервера
+    известен всегда: API Forgejo живёт по ``<сервер>/api/v1``.
+    """
+    explicit = api_url.strip().rstrip("/")
+    if explicit:
+        return explicit
+    server = server_url.strip().rstrip("/")
+    if not server:
+        raise ReleaseError("нужен адрес API: GITHUB_API_URL или GITHUB_SERVER_URL")
+    host = urllib.parse.urlsplit(server).hostname or ""
+    if host == "github.com" or host.endswith(".github.com"):
+        return "https://api.github.com"
+    return f"{server}/api/v1"
+
+
+def is_tls_error(error: BaseException) -> bool:
+    """Признак отказа из-за сертификата TLS, а не логики запроса."""
+    text = str(error).upper()
+    return "CERTIFICATE_VERIFY_FAILED" in text or "SSL" in text
+
+
 def _multipart(asset: pathlib.Path) -> tuple[str, bytes]:
     """Тело form-data с одним полем ``attachment`` — так ждёт Forgejo."""
     boundary = f"----asustor-adm-{uuid.uuid4().hex}"
@@ -124,10 +173,14 @@ class ReleaseClient:
         self,
         settings: Settings,
         transport: Transport | None = None,
+        insecure_transport: Transport | None = None,
         log: Any = print,
     ) -> None:
         self.settings = settings
         self.transport: Transport = transport or UrllibTransport()
+        self.insecure_transport: Transport = insecure_transport or UrllibTransport(
+            insecure=True
+        )
         self.log = log
 
     @property
@@ -141,7 +194,9 @@ class ReleaseClient:
     def _headers(self, **extra: str) -> dict[str, str]:
         headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
         if self.settings.token:
-            headers["Authorization"] = f"Bearer {self.settings.token}"
+            # Forgejo ждёт схему token для своих токенов, GitHub — Bearer.
+            scheme = "Bearer" if self.settings.engine == ENGINE_GITHUB else "token"
+            headers["Authorization"] = f"{scheme} {self.settings.token}"
         headers.update(extra)
         return headers
 
@@ -153,7 +208,15 @@ class ReleaseClient:
         headers: Mapping[str, str],
         data: bytes | None = None,
     ) -> Response:
-        return self.transport.send(method, url, headers=headers, data=data)
+        try:
+            return self.transport.send(method, url, headers=headers, data=data)
+        except ReleaseError as error:
+            # Внутренний Forgejo часто отдаёт самоподписанный сертификат,
+            # которого нет в доверенных на раннере: повторяем без проверки.
+            if self.settings.engine == ENGINE_GITHUB or not is_tls_error(error):
+                raise
+            self.log("сертификат API не проверен: повтор запроса без проверки TLS")
+            return self.insecure_transport.send(method, url, headers=headers, data=data)
 
     def _ensure(
         self, response: Response, action: str, allowed: tuple[int, ...] = (200, 201)
@@ -315,6 +378,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="адрес API (по умолчанию GITHUB_API_URL)",
     )
     parser.add_argument(
+        "--server-url",
+        default=_env("GITHUB_SERVER_URL", "SERVER_URL"),
+        help="адрес сервера для вывода API (по умолчанию GITHUB_SERVER_URL)",
+    )
+    parser.add_argument(
         "--repo",
         default=_env("GITHUB_REPOSITORY", "REPOSITORY"),
         help="репозиторий owner/name (по умолчанию GITHUB_REPOSITORY)",
@@ -343,11 +411,16 @@ def main(argv: list[str] | None = None, transport: Transport | None = None) -> i
     """Точка входа CLI: адрес релиза в stdout, сообщения в stderr."""
     args = _parse_args(argv)
     try:
-        if not args.api_url or not args.repo:
-            raise ReleaseError("нужны адрес API и репозиторий owner/name")
-        engine = args.engine or detect_engine(args.api_url)
+        if not args.repo:
+            raise ReleaseError("нужен репозиторий owner/name")
+        api_url = resolve_api_url(args.api_url, args.server_url)
+        engine = args.engine or detect_engine(api_url)
+        # Адрес и движок не секретны: без них отказ API трудно объяснить.
+        print(
+            f"API {api_url}, репозиторий {args.repo}, движок {engine}", file=sys.stderr
+        )
         settings = Settings(
-            api_url=args.api_url,
+            api_url=api_url,
             repository=args.repo,
             token=args.token,
             engine=engine,
@@ -369,7 +442,7 @@ def main(argv: list[str] | None = None, transport: Transport | None = None) -> i
             size = args.asset.stat().st_size
             print(
                 f"черновик {args.tag}, ассет {args.asset.name} ({size} байт), "
-                f"затем публикация; движок {engine}"
+                f"затем публикация; API {api_url}, движок {engine}"
             )
             return 0
         url = client.publish(tag=args.tag, body=body, asset=args.asset)
