@@ -143,19 +143,13 @@ jobs:
           tag=$(field tag)
           release=$(printf '%s' "$state" | py -c \
             'import json, sys; print("true" if json.load(sys.stdin)["should_release"] else "false")')
-          if [ "$release" = "false" ]; then
-            # Тег может стоять, а релиза не быть: прошлый запуск упал на
-            # загрузке архива. Тогда релиз доводится до конца.
-            existing=$(py scripts/publish_release.py --tag "$tag" --check)
-            echo "состояние релиза $tag: $existing"
-            if [ "$existing" = "missing" ]; then
-              release=true
-            else
-              echo "выпуск не требуется: релиз $tag уже опубликован"
-            fi
-          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "release=$release" >> "$GITHUB_OUTPUT"
+          if [ "$release" = "true" ]; then
+            echo "версия $tag выпускается: нужен тег"
+          else
+            echo "тег $tag уже стоит: публикация догонит недостающий релиз"
+          fi
 
       - name: Показать план выпуска
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
@@ -190,8 +184,8 @@ jobs:
           git push origin "HEAD:$BRANCH" --follow-tags
 
       - name: Собрать архив плагина
+        if: ${{ inputs.dry_run != true }}
         id: archive
-        if: steps.state.outputs.release == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -202,7 +196,7 @@ jobs:
           ls -l "$asset"
 
       - name: Собрать текст релиза
-        if: steps.state.outputs.release == 'true'
+        if: ${{ inputs.dry_run != true }}
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -212,7 +206,7 @@ jobs:
           cat "${RUNNER_TEMP:-/tmp}/notes.md"
 
       - name: Опубликовать релиз
-        if: steps.state.outputs.release == 'true'
+        if: ${{ inputs.dry_run != true }}
         env:
           # Стандартные имена Actions: их же читает scripts/publish_release.py,
           # поэтому локальный запуск повторяет поведение CI.
