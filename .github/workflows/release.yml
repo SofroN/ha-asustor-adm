@@ -228,35 +228,3 @@ jobs:
             args+=(--engine "$RELEASE_ENGINE")
           fi
           uv run --no-project python scripts/publish_release.py "${args[@]}"
-
-      # Для отладки в целевом окружении: логи шагов Forgejo отдаёт только
-      # владельцу в веб-интерфейсе, поэтому факты складываются в ветку.
-      - name: Диагностика отказа выпуска
-        if: failure()
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.state.outputs.tag }}
-        run: |
-          set -o pipefail
-          {
-            echo "tag=${TAG:-<пусто>}"
-            echo "api_url=${GITHUB_API_URL:-<пусто>}"
-            echo "server_url=${GITHUB_SERVER_URL:-<пусто>}"
-            echo "repo=${GITHUB_REPOSITORY:-<пусто>}"
-            echo "token_set=$([ -n "$GITHUB_TOKEN" ] && echo yes || echo no)"
-            curl -sS -o /dev/null -w 'api_strict=%{http_code}\n' \
-              "$GITHUB_API_URL/version" || true
-            curl -sk -o /dev/null -w 'api_insecure=%{http_code}\n' \
-              "$GITHUB_API_URL/version" || true
-            curl -sS -o /dev/null -w 'auth_bearer=%{http_code}\n' \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/${TAG:-v0}" || true
-            curl -sS -o /dev/null -w 'auth_token=%{http_code}\n' \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/${TAG:-v0}" || true
-          } > diag.txt 2>&1
-          cat diag.txt
-          git checkout -q -B release-diag
-          git add diag.txt
-          git commit -q -m "chore: release diagnostics"
-          git push -q origin release-diag
