@@ -38,6 +38,9 @@ on:
         type: boolean
         default: false
 
+# contents: write — минимум для этого workflow: пуш тега, создание релиза
+# и загрузка ассета идут через тот же GITHUB_TOKEN. Всё остальное (issues,
+# packages, deployments) не нужно.
 permissions:
   contents: write
 

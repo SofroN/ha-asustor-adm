@@ -6,6 +6,13 @@ name: CI
 # стандартный `ubuntu-latest` (публичный репозиторий — минуты не тарифицируются).
 # Контекст `vars` разрешён в runs-on в обоих движках.
 
+# Явные права токена: обе задачи только читают репозиторий (checkout),
+# записи в репозиторий проверки не делают. Без блока действовали бы права
+# по умолчанию — у старых репозиториев read-write (CodeQL
+# actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
