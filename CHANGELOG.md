@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-16
+
 ### Добавлено
 
 - Выпуск по версии: когда в `main` попадает `VERSION` с большим номером, workflow `Release` сам ставит тег `vX.Y.Z` и публикует релиз. Повторный пуш и понижение версии релиза не создают, а ручной запуск остаётся для bump номера из интерфейса Actions.
@@ -47,5 +49,6 @@
 
 - CI ведётся одним файлом `.github/workflows/ci.yml` для GitHub Actions и Forgejo Actions; метка раннера берётся из переменной `CI_RUNNER`.
 
-[Unreleased]: https://github.com/SofroN/ha-asustor-adm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/SofroN/ha-asustor-adm/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/SofroN/ha-asustor-adm/releases/tag/v0.2.0
 [0.1.0]: https://github.com/SofroN/ha-asustor-adm/releases/tag/v0.1.0
